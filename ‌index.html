@@ -1,0 +1,1907 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" href="images/1910.jpg" type="image/jpg" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Comic+Neue:ital,wght@0,300;0,400;0,700;1,300;1,400;1,700&display=swap" rel="stylesheet">
+<title>wick's sorting visualizer!</title>
+<style>
+:root {
+    --bg: #0b1120;
+    --bg2: #0f172a;
+    --card: #1e293b;
+    --card2: #162033;
+    --border: #334155;
+    --accent: #38bdf8;
+    --accent2: #2563eb;
+    --text: #f1f5f9;
+    --muted: #94a3b8;
+    --ok: #10b981;
+    --warn: #f59e0b;
+    --bad: #ef4444;
+}
+* { box-sizing: border-box; }
+body {
+    margin: 0;
+    padding: 20px;
+    font-family: 'Comic Neue', cursive;
+    background: radial-gradient(1200px 600px at 70% -10%, #172554 0%, var(--bg) 60%) fixed;
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+header { text-align: center; margin-bottom: 18px; }
+h1 { margin: 0 0 4px; font-size: 28px; font-weight: 650; color: var(--accent); letter-spacing: -0.3px; }
+.subtitle { margin: 0; color: var(--muted); font-size: 14px; }
+#engine {
+    display: inline-block; margin-top: 10px; padding: 4px 12px; border-radius: 999px;
+    font-size: 12px; font-weight: 600; background: #422006; color: #fde68a; border: 1px solid #854d0e;
+}
+#engine.ready { background: #052e1b; color: #6ee7b7; border-color: #065f46; }
+#engine.error { background: #450a0a; color: #fca5a5; border-color: #991b1b; }
+
+.layout {
+    display: grid;
+    grid-template-columns: minmax(340px, 0.85fr) 1.35fr;
+    gap: 18px;
+    width: 100%;
+    max-width: 1450px;
+}
+.panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    box-shadow: 0 12px 30px -10px rgba(0,0,0,.5);
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+label.title { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; display: block; }
+
+select, textarea, button, input { font-family: inherit; }
+select {
+    width: 100%; background: #0b1220; color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 9px 10px; font-size: 14px; outline: none;
+}
+select:focus, textarea:focus { border-color: var(--accent); }
+#preset-meta { margin: 10px 0 12px; font-size: 13px; color: var(--muted); line-height: 1.45; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.chip { background: #0b1220; border: 1px solid var(--border); color: #cbd5e1; border-radius: 999px; padding: 2px 10px; font-size: 12px; }
+
+textarea#code {
+    flex: 1; min-height: 340px; width: 100%;
+    background: #070b14; color: #86efac;
+    border: 1px solid var(--border); border-radius: 8px; padding: 12px;
+    font: 13px/1.5 'Fira Code', 'Cascadia Code', Consolas, 'Courier New', monospace;
+    tab-size: 4; white-space: pre; overflow: auto; resize: none; outline: none;
+}
+#error {
+    margin-top: 10px; background: #2a0f12; border: 1px solid #7f1d1d; color: #fecaca;
+    border-radius: 8px; padding: 10px 12px; font-size: 13px;
+}
+#error pre { margin: 0; white-space: pre-wrap; font: 12px/1.5 Consolas, monospace; }
+details.api { margin-top: 12px; font-size: 13px; color: var(--muted); }
+details.api summary { cursor: pointer; color: #cbd5e1; font-weight: 600; }
+details.api table { margin-top: 8px; border-collapse: collapse; width: 100%; }
+details.api td { padding: 4px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+details.api td:first-child { font-family: Consolas, monospace; color: #7dd3fc; white-space: nowrap; }
+.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; }
+
+.toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+button {
+    background: var(--accent2); color: #fff; border: none; border-radius: 8px;
+    padding: 9px 16px; font-weight: 600; font-size: 14px; cursor: pointer; transition: background .15s, transform .05s;
+}
+button:hover:not(:disabled) { background: #1d4ed8; }
+button:active:not(:disabled) { transform: translateY(1px); }
+button:disabled { background: #475569; opacity: .55; cursor: not-allowed; }
+button.ghost { background: #0b1220; border: 1px solid var(--border); color: #e2e8f0; padding: 9px 12px; }
+button.ghost:hover:not(:disabled) { background: #17233a; }
+#play { min-width: 112px; }
+.spacer { flex: 1; }
+
+.canvas-wrap {
+    position: relative; flex: 1; min-height: 360px;
+    background: #070b14; border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+}
+canvas#stage { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#msg {
+    position: absolute; top: 10px; left: 10px; background: rgba(15,23,42,.82); border: 1px solid var(--border);
+    padding: 4px 12px; border-radius: 999px; font-size: 12px; backdrop-filter: blur(4px);
+}
+#msg.ok { color: #6ee7b7; border-color: #065f46; }
+#msg.warn { color: #fcd34d; border-color: #92400e; }
+
+input[type=range] { accent-color: var(--accent); cursor: pointer; }
+#scrub { width: 100%; margin: 10px 0 2px; }
+
+.stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 8px 0 12px; }
+.stat { background: #0b1220; border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; }
+.stat span { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.stat b { font-size: 16px; font-variant-numeric: tabular-nums; }
+
+.options { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px 16px; align-items: end; }
+.opt label { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.opt label b { color: #e2e8f0; font-weight: 600; }
+.opt input[type=range] { width: 100%; }
+.opt.check label { display: flex; justify-content: flex-start; align-items: center; gap: 8px; font-size: 14px; color: #e2e8f0; cursor: pointer; padding: 8px 0; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 12px; font-size: 12px; color: var(--muted); }
+.hint { margin-top: 10px; font-size: 12px; color: #64748b; }
+.hidden { display: none !important; }
+
+@media (max-width: 960px) {
+    .layout { grid-template-columns: 1fr; }
+    textarea#code { min-height: 280px; }
+    .stats { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* ── sort lab skin: hand-made, playful, deliberately not a dashboard ── */
+:root {
+    --bg: #292929; --bg2: #303030; --card: #303030; --card2: #292929;
+    --border: #777b9b; --accent: #cbd0ff; --accent2: #626fd5;
+    --text: #f7f5ff; --muted: #c5c4d2; --ok: #79e0b4; --warn: #ffe85c; --bad: #ff8c9b;
+    --editor: #222126;
+}
+body {
+    padding: 18px clamp(12px, 2.4vw, 30px) 30px;
+    font-family: 'Trebuchet MS', 'Segoe UI', system-ui, sans-serif;
+    background: #292929; gap: 0;
+}
+.site-header { width: 100%; max-width: 1450px; margin: 0 0 22px; text-align: center; }
+.brand-card {
+    display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
+    min-width: 230px; padding: 13px 28px 14px; margin: 0 auto 9px;
+    background: #606ed3; border: 1px solid #f2f0ff; border-radius: 20px;
+    box-shadow: 4px 4px 0 rgba(0,0,0,.12); transform: rotate(-.5deg);
+}
+.brand-mark { font: 700 16px/1.1 Consolas, monospace; color: #fff2a1; letter-spacing: .12em; margin-bottom: 2px; }
+h1 { margin: 0; font-size: 30px; font-weight: 500; color: white; letter-spacing: .01em; }
+.brand-subtitle { margin: 5px 0 0; font-size: 12px; color: #f1f0ff; }
+.subtitle { margin: 3px 0 10px; color: #eeedff; font-size: 13px; }
+#engine { margin-top: 0; border-radius: 999px; font-weight: 500; }
+#engine.ready { background: #2b4a3d; color: #a9f4d4; border-color: #6dbd9c; }
+#engine.error { background: #512b32; color: #ffd0d6; border-color: #c96b7a; }
+.layout { align-items: stretch; gap: 16px; }
+.panel {
+    background: #303030; border: 1px solid #777b9b; border-radius: 17px;
+    padding: 17px; box-shadow: 4px 5px 0 rgba(0,0,0,.16); gap: 2px;
+}
+label.title { color: #d7d5ed; letter-spacing: .04em; font-size: 11px; }
+select { background: #252529; border: 1px solid #696b83; border-radius: 10px; color: #f7f5ff; }
+select:focus, textarea:focus { border-color: #c3c8ff; box-shadow: 0 0 0 2px rgba(157,165,255,.14); }
+#preset-meta { color: #d0cfdb; }
+.chip { background: #3a3a44; border-color: #77778f; color: #efedff; border-radius: 7px; }
+button { background: #626fd5; border-radius: 10px; box-shadow: 0 2px 0 rgba(0,0,0,.2); }
+button:hover:not(:disabled) { background: #7783e8; }
+button.ghost { background: #29292d; border-color: #77778f; color: #f2f0ff; }
+button.ghost:hover:not(:disabled) { background: #41414b; }
+button:disabled { background: #555560; }
+.canvas-wrap { background: #242427; border-color: #777b9b; border-radius: 13px; }
+#msg { background: rgba(43,43,49,.92); border-color: #6f7188; }
+.stat { background: #29292d; border-color: #626277; border-radius: 10px; }
+.stat span { color: #c3c1d0; }
+.stat b { color: #fff; }
+.opt label { color: #d0cedd; }
+.opt label b { color: #fff; }
+.opt.check label { color: #f3f1ff; }
+.hint { color: #b0afbf; }
+details.api summary { color: #e9e7ff; }
+details.api td:first-child { color: #c6caff; }
+.editor-shell {
+    position: relative; flex: 1; min-height: 340px; width: 100%; overflow: hidden;
+    background: var(--editor); border: 1px solid #77778e; border-radius: 11px;
+    isolation: isolate;
+}
+.editor-shell:focus-within { border-color: #bfc5ff; box-shadow: 0 0 0 2px rgba(157,165,255,.12); }
+#code-highlight, textarea#code {
+    position: absolute; inset: 0 0 29px; width: 100%; height: calc(100% - 29px); margin: 0;
+    padding: 13px 14px; border: 0; border-radius: 0; outline: 0;
+    font: 13px/1.58 'Cascadia Code', 'Fira Code', Consolas, monospace;
+    letter-spacing: 0; tab-size: 4; white-space: pre; overflow: auto;
+    font-variant-ligatures: none; scrollbar-width: thin; scrollbar-color: #646477 #26262b;
+}
+#code-highlight { z-index: 0; pointer-events: none; color: #e6e4ee; }
+textarea#code {
+    z-index: 1; resize: none; background: transparent; color: transparent;
+    -webkit-text-fill-color: transparent; caret-color: #fff2a1; overflow: auto;
+    text-shadow: none; opacity: 1; border: 0; box-shadow: none;
+    selection-color: #fff;
+}
+textarea#code::selection { background: rgba(113,126,233,.48); -webkit-text-fill-color: transparent; }
+.editor-footer {
+    position: absolute; z-index: 2; height: 29px; bottom: 0; left: 0; right: 0;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 0 11px; background: #303039; border-top: 1px solid #484854;
+    color: #b9b8cc; font: 10px/1 Consolas, monospace; letter-spacing: .04em;
+}
+.py-comment { color: #9395a9; font-style: italic; }
+.py-string { color: #b8e6a2; }
+.py-keyword { color: #c5a5ff; font-weight: 600; }
+.py-builtin { color: #79dce8; }
+.py-number { color: #f4bd83; }
+.py-function { color: #f4d58a; }
+.py-operator { color: #d7b5ff; }
+.py-decorator { color: #ff9eb5; }
+.py-self { color: #f2a8cf; }
+::selection { background: rgba(123,134,237,.45); }
+input[type=range] { accent-color: #9da5ff; }
+#scrub { accent-color: #9da5ff; }
+@media (max-width: 960px) {
+    body { padding: 12px; }
+    .brand-card { min-width: 205px; }
+    .editor-shell { min-height: 290px; }
+    .layout { gap: 13px; }
+}
+@media (max-width: 520px) {
+    .panel { padding: 12px; }
+    .toolbar button { padding: 8px 10px; }
+    .stats { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .editor-footer span:last-child { display: none; }
+    #code-highlight, textarea#code { font-size: 12px; padding: 11px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+    .panel { animation: pop-in .38s both; }
+    .panel:nth-child(2) { animation-delay: .06s; }
+    button, select { transition: background .16s ease, border-color .16s ease, transform .12s ease; }
+    @keyframes pop-in { from { opacity: .6; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
+}
+
+</style>
+</head>
+<body>
+
+<header class="site-header">
+    <div class="brand-card">
+        <div class="brand-mark" aria-hidden="true">👀</div>
+        <h1>sorty mcsortface</h1>
+        <p class="brand-subtitle">a lil web playground for sorting algorithms</p>
+    </div>
+    <p class="subtitle">woahh i made this to visualize sorting algorithms in my computer science class</p>
+    <span id="engine">&#9203; Loading Python (Pyodide)&hellip;</span>
+</header>
+
+<main class="layout">
+    <!-- ================= EDITOR ================= -->
+    <section class="panel">
+        <label class="title" for="preset">Algorithm presets</label>
+        <select id="preset"></select>
+        <div id="preset-meta"></div>
+
+        <label class="title" for="code">Python code</label>
+        <div class="editor-shell" id="editor-shell">
+            <pre id="code-highlight" aria-hidden="true"></pre>
+            <textarea id="code" spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="Python code editor" wrap="off"></textarea>
+            <div class="editor-footer"><span>PYTHON 3</span><span id="line-count">1 line</span><span>CTRL / ⌘ + ENTER TO RUN</span></div>
+        </div>
+        <div id="error" class="hidden"><pre id="error-text"></pre></div>
+
+        <details class="api">
+            <summary>Visualizer API (what to yield)</summary>
+            <table>
+                <tr><td>yield "compare", i, j</td><td><span class="swatch" style="background:#ef4444"></span>Highlight two bars being compared</td></tr>
+                <tr><td>yield "swap", i, j</td><td><span class="swatch" style="background:#f59e0b"></span>You swapped arr[i] and arr[j] (do the swap in your code too)</td></tr>
+                <tr><td>yield "set", i, v</td><td><span class="swatch" style="background:#a78bfa"></span>You wrote arr[i] = v (merge sort, counting sort, shifts&hellip;)</td></tr>
+                <tr><td>yield "pivot", i</td><td><span class="swatch" style="background:#e879f9"></span>Mark a pivot / current minimum</td></tr>
+                <tr><td>yield "sorted", i[, j]</td><td><span class="swatch" style="background:#10b981"></span>Lock in a bar (or range i..j) as final</td></tr>
+            </table>
+            <p>Name the function anything. The <b>last public function taking exactly one argument</b> (the list) is run. Plain functions that don't yield (e.g. <code>arr.sort()</code>) also work &mdash; the end result is animated. After playback the real result is verified, so a missing <code>yield</code> gets flagged.</p>
+        </details>
+    </section>
+
+    <!-- ================= STAGE ================= -->
+    <section class="panel">
+        <div class="toolbar">
+            <button id="play" disabled>&#9654; Run</button>
+            <button id="prev" class="ghost" title="Step back" disabled>&#9198;</button>
+            <button id="next" class="ghost" title="Step forward" disabled>&#9197;</button>
+            <button id="reset" class="ghost" title="Back to the unsorted array">&#9209; Reset</button>
+            <span class="spacer"></span>
+            <button id="shuffle" class="ghost" title="Generate a new array">&#128256; New array</button>
+        </div>
+
+        <div class="canvas-wrap">
+            <canvas id="stage"></canvas>
+            <div id="msg">Ready</div>
+        </div>
+
+        <input type="range" id="scrub" min="0" max="0" value="0" disabled title="Scrub through the animation">
+
+        <div class="stats">
+            <div class="stat"><span>Comparisons</span><b id="s-cmp">0</b></div>
+            <div class="stat"><span>Swaps</span><b id="s-swap">0</b></div>
+            <div class="stat"><span>Writes</span><b id="s-set">0</b></div>
+            <div class="stat"><span>Step</span><b id="s-step">0 / 0</b></div>
+            <div class="stat"><span>Python time</span><b id="s-py">&ndash;</b></div>
+        </div>
+
+        <div class="options">
+            <div class="opt">
+                <label for="size">Array size <b id="size-val">64</b></label>
+                <input type="range" id="size" min="4" max="1000" value="64">
+            </div>
+            <div class="opt">
+                <label for="speed">Speed <b id="speed-val"></b></label>
+                <input type="range" id="speed" min="0" max="100" value="35">
+            </div>
+            <div class="opt">
+                <label for="array-type">Starting array</label>
+                <select id="array-type">
+                    <option value="random">Random (shuffled 1..n)</option>
+                    <option value="dupes">Random with duplicates</option>
+                    <option value="few">Few unique values</option>
+                    <option value="nearly">Nearly sorted</option>
+                    <option value="reversed">Reversed</option>
+                    <option value="sorted">Already sorted</option>
+                    <option value="organ">Organ pipes</option>
+                </select>
+            </div>
+            <div class="opt">
+                <label for="color-mode">Bar colors</label>
+                <select id="color-mode">
+                    <option value="classic">Classic blue</option>
+                    <option value="rainbow">Rainbow</option>
+                    <option value="gradient">Blue &rarr; pink</option>
+                </select>
+            </div>
+            <div class="opt check">
+                <label><input type="checkbox" id="sound"> &#128266; Sound</label>
+            </div>
+        </div>
+
+        <div class="legend">
+            <span><span class="swatch" style="background:#ef4444"></span>compare</span>
+            <span><span class="swatch" style="background:#f59e0b"></span>swap</span>
+            <span><span class="swatch" style="background:#a78bfa"></span>write</span>
+            <span><span class="swatch" style="background:#e879f9"></span>pivot</span>
+            <span><span class="swatch" style="background:#10b981"></span>sorted</span>
+        </div>
+        <div class="hint">Tip: Ctrl/Cmd + Enter in the editor runs your code. Your code runs in a background worker, so infinite loops can't freeze the page (15 s timeout).</div>
+    </section>
+</main>
+
+<!-- ======================= Python harness (runs inside Pyodide) ======================= -->
+<script type="text/plain" id="py-harness">
+import json, time, inspect, sys
+
+sys.setrecursionlimit(4000)
+MAX_EVENTS = 1000000
+_CODES = {'compare': 0, 'swap': 1, 'set': 2, 'pivot': 3, 'sorted': 4}
+
+
+def _i(x):
+    if x is None:
+        return -1
+    try:
+        return int(x)
+    except Exception:
+        return -1
+
+
+def _required(f):
+    try:
+        ps = inspect.signature(f).parameters.values()
+    except (TypeError, ValueError):
+        return 99
+    return sum(1 for p in ps if p.default is p.empty and p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD))
+
+
+def _pick_entry(ns):
+    funcs = [v for v in ns.values() if inspect.isfunction(v) and v.__module__ == '__user__']
+    one = [f for f in funcs if _required(f) == 1]
+    pool = [f for f in one if 'sort' in f.__name__.lower()] or one or funcs
+    public = [f for f in pool if not f.__name__.startswith('_')]
+    pool = public or pool
+    return pool[-1] if pool else None
+
+
+def run_user(code, data_json):
+    t0 = time.perf_counter()
+    try:
+        data = json.loads(data_json)
+        ns = {'__name__': '__user__'}
+        exec(compile(code, '<your code>', 'exec'), ns)
+        entry = _pick_entry(ns)
+        if entry is None:
+            return json.dumps({'ok': False, 'error': 'No function found. Define one that takes the list, e.g.  def my_sort(arr): ...'})
+        original = list(data)
+        arr = list(data)
+        res = entry(arr)
+        flat = []
+        count = 0
+        if inspect.isgenerator(res):
+            for step in res:
+                if not isinstance(step, (tuple, list)) or not step:
+                    continue
+                name = step[0]
+                c = _CODES.get(name) if isinstance(name, str) else None
+                if c is None:
+                    continue
+                flat.append(c)
+                flat.append(_i(step[1]) if len(step) > 1 else -1)
+                flat.append(_i(step[2]) if len(step) > 2 else -1)
+                count += 1
+                if count > MAX_EVENTS:
+                    raise RuntimeError('Too many steps (over %d). Lower the array size or yield fewer events.' % MAX_EVENTS)
+            final = arr
+        else:
+            final = res if isinstance(res, list) else arr
+            for idx, (old, new) in enumerate(zip(original, final)):
+                if old != new:
+                    flat.extend((2, idx, int(new)))
+                    count += 1
+            flat.extend((4, 0, len(final) - 1))
+            count += 1
+        ms = round((time.perf_counter() - t0) * 1000, 1)
+        return json.dumps({'ok': True, 'events': flat, 'final': [int(x) for x in final], 'ms': ms, 'count': count}, separators=(',', ':'))
+    except SyntaxError as e:
+        return json.dumps({'ok': False, 'error': 'SyntaxError: %s (line %s)' % (e.msg, e.lineno)})
+    except BaseException as e:
+        import traceback
+        tb = traceback.extract_tb(e.__traceback__)
+        user = [f for f in tb if f.filename == '<your code>']
+        msg = '%s: %s' % (type(e).__name__, e)
+        if user:
+            msg += '  (line %d)' % user[-1].lineno
+        return json.dumps({'ok': False, 'error': msg})
+</script>
+
+<!-- ======================= Web worker source ======================= -->
+<script type="text/plain" id="worker-src">
+const INDEX = 'https://cdn.jsdelivr.net/pyodide/v0.26.1/full/';
+let py = null;
+let ready = null;
+
+self.onmessage = async (e) => {
+    const m = e.data;
+    if (m.type === 'init') {
+        ready = (async () => {
+            importScripts(INDEX + 'pyodide.js');
+            py = await loadPyodide({ indexURL: INDEX });
+            py.runPython(m.harness);
+            self.postMessage({ type: 'ready' });
+        })().catch((err) => {
+            self.postMessage({ type: 'fatal', message: String((err && err.message) || err) });
+        });
+        return;
+    }
+    if (m.type === 'run') {
+        await ready;
+        if (!py) return;
+        try {
+            py.globals.set('__code', m.code);
+            py.globals.set('__data_json', JSON.stringify(m.data));
+            const out = JSON.parse(py.runPython('run_user(__code, __data_json)'));
+            if (out.ok) {
+                const ev = Int32Array.from(out.events);
+                self.postMessage({ type: 'result', ok: true, events: ev, final: out.final, ms: out.ms, count: out.count }, [ev.buffer]);
+            } else {
+                self.postMessage({ type: 'result', ok: false, error: out.error });
+            }
+        } catch (err) {
+            self.postMessage({ type: 'result', ok: false, error: String((err && err.message) || err) });
+        }
+    }
+};
+</script>
+
+<script>
+'use strict';
+
+/* PRESETS-START */
+const PRESETS = [
+{
+    id: 'template', group: 'Playground', name: 'Blank template (write your own)',
+    time: 'O(n²)', space: 'O(1)', stable: false,
+    desc: 'A starter showing every yield type. Edit it and press Run.',
+    code: `# Visualizer API - yield these from a generator function:
+#   yield "compare", i, j     highlight two bars          (red)
+#   yield "swap", i, j        you swapped arr[i], arr[j]  (orange)  <- do the swap yourself too!
+#   yield "set", i, value     you wrote arr[i] = value    (purple)
+#   yield "pivot", i          mark a pivot bar            (magenta)
+#   yield "sorted", i[, j]    lock a bar/range as final   (green)
+#
+# Name your function anything. The last public function that takes
+# exactly one argument (the list) is the one that runs.
+
+def my_sort(arr):
+    n = len(arr)
+    for i in range(n):
+        for j in range(i + 1, n):
+            yield "compare", i, j
+            if arr[j] < arr[i]:
+                arr[i], arr[j] = arr[j], arr[i]
+                yield "swap", i, j
+        yield "sorted", i
+`
+},
+{
+    id: 'bubble', group: 'Simple (O(n²))', name: 'Bubble Sort',
+    time: 'O(n²)', space: 'O(1)', stable: true,
+    desc: 'Repeatedly swaps adjacent out-of-order pairs; the largest bar bubbles to the end on each pass.',
+    code: `def bubble_sort(arr):
+    n = len(arr)
+    for i in range(n - 1):
+        for j in range(n - 1 - i):
+            yield "compare", j, j + 1
+            if arr[j] > arr[j + 1]:
+                arr[j], arr[j + 1] = arr[j + 1], arr[j]
+                yield "swap", j, j + 1
+        yield "sorted", n - 1 - i
+    yield "sorted", 0, n - 1
+`
+},
+{
+    id: 'bubble_opt', group: 'Simple (O(n²))', name: 'Bubble Sort (optimized)',
+    time: 'O(n²), O(n) best', space: 'O(1)', stable: true,
+    desc: 'Remembers where the last swap happened so it skips the already-sorted tail and exits early on nearly-sorted data.',
+    code: `def bubble_sort_optimized(arr):
+    n = len(arr)
+    end = n - 1
+    while end > 0:
+        last_swap = 0
+        for j in range(end):
+            yield "compare", j, j + 1
+            if arr[j] > arr[j + 1]:
+                arr[j], arr[j + 1] = arr[j + 1], arr[j]
+                yield "swap", j, j + 1
+                last_swap = j
+        yield "sorted", end, n - 1
+        end = last_swap
+    yield "sorted", 0, n - 1
+`
+},
+{
+    id: 'cocktail', group: 'Simple (O(n²))', name: 'Cocktail Shaker Sort',
+    time: 'O(n²)', space: 'O(1)', stable: true,
+    desc: 'Bidirectional bubble sort: sweeps right, then left, shrinking both ends.',
+    code: `def cocktail_shaker_sort(arr):
+    lo, hi = 0, len(arr) - 1
+    swapped = True
+    while swapped and lo < hi:
+        swapped = False
+        for i in range(lo, hi):
+            yield "compare", i, i + 1
+            if arr[i] > arr[i + 1]:
+                arr[i], arr[i + 1] = arr[i + 1], arr[i]
+                yield "swap", i, i + 1
+                swapped = True
+        yield "sorted", hi
+        hi -= 1
+        for i in range(hi, lo, -1):
+            yield "compare", i - 1, i
+            if arr[i - 1] > arr[i]:
+                arr[i - 1], arr[i] = arr[i], arr[i - 1]
+                yield "swap", i - 1, i
+                swapped = True
+        yield "sorted", lo
+        lo += 1
+    yield "sorted", 0, len(arr) - 1
+`
+},
+{
+    id: 'oddeven', group: 'Simple (O(n²))', name: 'Odd-Even Sort',
+    time: 'O(n²)', space: 'O(1)', stable: true,
+    desc: 'Compares odd/even index pairs in alternating phases. Designed for parallel hardware, mesmerizing in serial.',
+    code: `def odd_even_sort(arr):
+    n = len(arr)
+    done = False
+    while not done:
+        done = True
+        for start in (1, 0):
+            for i in range(start, n - 1, 2):
+                yield "compare", i, i + 1
+                if arr[i] > arr[i + 1]:
+                    arr[i], arr[i + 1] = arr[i + 1], arr[i]
+                    yield "swap", i, i + 1
+                    done = False
+    yield "sorted", 0, n - 1
+`
+},
+{
+    id: 'gnome', group: 'Simple (O(n²))', name: 'Gnome Sort',
+    time: 'O(n²)', space: 'O(1)', stable: true,
+    desc: 'Walks forward; on a bad pair it swaps and steps back, like a garden gnome sorting flowerpots.',
+    code: `def gnome_sort(arr):
+    n = len(arr)
+    i = 0
+    while i < n:
+        if i == 0:
+            i += 1
+            continue
+        yield "compare", i - 1, i
+        if arr[i - 1] <= arr[i]:
+            i += 1
+        else:
+            arr[i - 1], arr[i] = arr[i], arr[i - 1]
+            yield "swap", i - 1, i
+            i -= 1
+    yield "sorted", 0, n - 1
+`
+},
+{
+    id: 'selection', group: 'Simple (O(n²))', name: 'Selection Sort',
+    time: 'O(n²)', space: 'O(1)', stable: false,
+    desc: 'Finds the minimum of the unsorted part (magenta) and swaps it to the front. Few swaps, many comparisons.',
+    code: `def selection_sort(arr):
+    n = len(arr)
+    for i in range(n - 1):
+        m = i
+        yield "pivot", m
+        for j in range(i + 1, n):
+            yield "compare", m, j
+            if arr[j] < arr[m]:
+                m = j
+                yield "pivot", m
+        if m != i:
+            arr[i], arr[m] = arr[m], arr[i]
+            yield "swap", i, m
+        yield "sorted", i
+    yield "sorted", 0, n - 1
+`
+},
+{
+    id: 'insertion', group: 'Simple (O(n²))', name: 'Insertion Sort',
+    time: 'O(n²), O(n) best', space: 'O(1)', stable: true,
+    desc: 'Grows a sorted prefix by sliding each new element left into place. Excellent on nearly-sorted data.',
+    code: `def insertion_sort(arr):
+    for i in range(1, len(arr)):
+        j = i
+        while j > 0:
+            yield "compare", j - 1, j
+            if arr[j - 1] > arr[j]:
+                arr[j - 1], arr[j] = arr[j], arr[j - 1]
+                yield "swap", j - 1, j
+                j -= 1
+            else:
+                break
+    yield "sorted", 0, len(arr) - 1
+`
+},
+{
+    id: 'binsertion', group: 'Simple (O(n²))', name: 'Binary Insertion Sort',
+    time: 'O(n²) moves, O(n log n) compares', space: 'O(1)', stable: true,
+    desc: 'Insertion sort that binary-searches the slot (fewer comparisons), then shifts elements with writes.',
+    code: `def binary_insertion_sort(arr):
+    for i in range(1, len(arr)):
+        key = arr[i]
+        lo, hi = 0, i
+        while lo < hi:
+            mid = (lo + hi) // 2
+            yield "compare", mid, i
+            if arr[mid] <= key:
+                lo = mid + 1
+            else:
+                hi = mid
+        j = i
+        while j > lo:
+            arr[j] = arr[j - 1]
+            yield "set", j, arr[j]
+            j -= 1
+        arr[lo] = key
+        yield "set", lo, key
+    yield "sorted", 0, len(arr) - 1
+`
+},
+{
+    id: 'shell', group: 'Simple (O(n²))', name: 'Shell Sort',
+    time: '~O(n^1.5)', space: 'O(1)', stable: false,
+    desc: 'Insertion sort over shrinking gaps, so far-apart elements travel early.',
+    code: `def shell_sort(arr):
+    n = len(arr)
+    gap = n // 2
+    while gap > 0:
+        for i in range(gap, n):
+            j = i
+            while j >= gap:
+                yield "compare", j - gap, j
+                if arr[j - gap] > arr[j]:
+                    arr[j - gap], arr[j] = arr[j], arr[j - gap]
+                    yield "swap", j - gap, j
+                    j -= gap
+                else:
+                    break
+        gap //= 2
+    yield "sorted", 0, n - 1
+`
+},
+{
+    id: 'comb', group: 'Simple (O(n²))', name: 'Comb Sort',
+    time: '~O(n²), fast in practice', space: 'O(1)', stable: false,
+    desc: 'Bubble sort with a gap that shrinks by 1.3x each pass, killing the slow "turtles" near the end.',
+    code: `def comb_sort(arr):
+    n = len(arr)
+    gap = n
+    swapped = True
+    while gap > 1 or swapped:
+        gap = max(1, int(gap / 1.3))
+        swapped = False
+        for i in range(n - gap):
+            yield "compare", i, i + gap
+            if arr[i] > arr[i + gap]:
+                arr[i], arr[i + gap] = arr[i + gap], arr[i]
+                yield "swap", i, i + gap
+                swapped = True
+    yield "sorted", 0, n - 1
+`
+},
+{
+    id: 'merge', group: 'Efficient (O(n log n))', name: 'Merge Sort (top-down)',
+    time: 'O(n log n)', space: 'O(n)', stable: true,
+    desc: 'Splits recursively, sorts each half, and merges. Purple bars show writes during the merge.',
+    code: `def _merge(arr, lo, mid, hi):
+    left = arr[lo:mid]
+    right = arr[mid:hi]
+    i = j = 0
+    k = lo
+    while i < len(left) and j < len(right):
+        yield "compare", lo + i, mid + j
+        if left[i] <= right[j]:
+            arr[k] = left[i]
+            i += 1
+        else:
+            arr[k] = right[j]
+            j += 1
+        yield "set", k, arr[k]
+        k += 1
+    while i < len(left):
+        arr[k] = left[i]
+        yield "set", k, arr[k]
+        i += 1
+        k += 1
+    while j < len(right):
+        arr[k] = right[j]
+        yield "set", k, arr[k]
+        j += 1
+        k += 1
+
+
+def _merge_sort(arr, lo, hi):
+    if hi - lo < 2:
+        return
+    mid = (lo + hi) // 2
+    yield from _merge_sort(arr, lo, mid)
+    yield from _merge_sort(arr, mid, hi)
+    yield from _merge(arr, lo, mid, hi)
+
+
+def merge_sort(arr):
+    yield from _merge_sort(arr, 0, len(arr))
+    yield "sorted", 0, len(arr) - 1
+`
+},
+{
+    id: 'merge_bu', group: 'Efficient (O(n log n))', name: 'Merge Sort (bottom-up)',
+    time: 'O(n log n)', space: 'O(n)', stable: true,
+    desc: 'Iterative merge sort: merges runs of width 1, 2, 4, 8... No recursion.',
+    code: `def _merge(arr, lo, mid, hi):
+    left = arr[lo:mid]
+    right = arr[mid:hi]
+    i = j = 0
+    k = lo
+    while i < len(left) and j < len(right):
+        yield "compare", lo + i, mid + j
+        if left[i] <= right[j]:
+            arr[k] = left[i]
+            i += 1
+        else:
+            arr[k] = right[j]
+            j += 1
+        yield "set", k, arr[k]
+        k += 1
+    while i < len(left):
+        arr[k] = left[i]
+        yield "set", k, arr[k]
+        i += 1
+        k += 1
+    while j < len(right):
+        arr[k] = right[j]
+        yield "set", k, arr[k]
+        j += 1
+        k += 1
+
+
+def merge_sort_bottom_up(arr):
+    n = len(arr)
+    width = 1
+    while width < n:
+        for lo in range(0, n, 2 * width):
+            mid = min(lo + width, n)
+            hi = min(lo + 2 * width, n)
+            if mid < hi:
+                yield from _merge(arr, lo, mid, hi)
+        width *= 2
+    yield "sorted", 0, n - 1
+`
+},
+{
+    id: 'quick_lomuto', group: 'Efficient (O(n log n))', name: 'Quick Sort (Lomuto, random pivot)',
+    time: 'O(n log n) avg', space: 'O(log n)', stable: false,
+    desc: 'Picks a random pivot (magenta), partitions around it, recurses on both sides.',
+    code: `import random
+
+
+def _partition(arr, lo, hi):
+    r = random.randint(lo, hi)
+    if r != hi:
+        arr[r], arr[hi] = arr[hi], arr[r]
+        yield "swap", r, hi
+    pivot = arr[hi]
+    yield "pivot", hi
+    i = lo
+    for j in range(lo, hi):
+        yield "compare", j, hi
+        if arr[j] < pivot:
+            if i != j:
+                arr[i], arr[j] = arr[j], arr[i]
+                yield "swap", i, j
+            i += 1
+    if i != hi:
+        arr[i], arr[hi] = arr[hi], arr[i]
+        yield "swap", i, hi
+    return i
+
+
+def _quick_sort(arr, lo, hi):
+    if lo > hi:
+        return
+    if lo == hi:
+        yield "sorted", lo
+        return
+    p = yield from _partition(arr, lo, hi)
+    yield "sorted", p
+    yield from _quick_sort(arr, lo, p - 1)
+    yield from _quick_sort(arr, p + 1, hi)
+
+
+def quick_sort(arr):
+    yield from _quick_sort(arr, 0, len(arr) - 1)
+`
+},
+{
+    id: 'quick_hoare', group: 'Efficient (O(n log n))', name: 'Quick Sort (Hoare, middle pivot)',
+    time: 'O(n log n) avg', space: 'O(log n)', stable: false,
+    desc: 'Two pointers close in from both ends around the middle element; fewer swaps than Lomuto.',
+    code: `def _quick_sort(arr, lo, hi):
+    if lo >= hi:
+        return
+    mid = (lo + hi) // 2
+    pivot = arr[mid]
+    yield "pivot", mid
+    i, j = lo, hi
+    while i <= j:
+        while True:
+            yield "compare", i, j
+            if arr[i] < pivot:
+                i += 1
+            else:
+                break
+        while True:
+            yield "compare", j, i
+            if arr[j] > pivot:
+                j -= 1
+            else:
+                break
+        if i <= j:
+            if i != j:
+                arr[i], arr[j] = arr[j], arr[i]
+                yield "swap", i, j
+            i += 1
+            j -= 1
+    yield from _quick_sort(arr, lo, j)
+    yield from _quick_sort(arr, i, hi)
+
+
+def quick_sort_hoare(arr):
+    yield from _quick_sort(arr, 0, len(arr) - 1)
+    yield "sorted", 0, len(arr) - 1
+`
+},
+{
+    id: 'heap', group: 'Efficient (O(n log n))', name: 'Heap Sort',
+    time: 'O(n log n)', space: 'O(1)', stable: false,
+    desc: 'Builds a max-heap in place, then repeatedly swaps the root to the end and sifts down.',
+    code: `def _sift_down(arr, start, end):
+    root = start
+    while True:
+        child = 2 * root + 1
+        if child > end:
+            return
+        if child + 1 <= end:
+            yield "compare", child, child + 1
+            if arr[child] < arr[child + 1]:
+                child += 1
+        yield "compare", root, child
+        if arr[root] < arr[child]:
+            arr[root], arr[child] = arr[child], arr[root]
+            yield "swap", root, child
+            root = child
+        else:
+            return
+
+
+def heap_sort(arr):
+    n = len(arr)
+    for start in range(n // 2 - 1, -1, -1):
+        yield from _sift_down(arr, start, n - 1)
+    for end in range(n - 1, 0, -1):
+        arr[0], arr[end] = arr[end], arr[0]
+        yield "swap", 0, end
+        yield "sorted", end
+        yield from _sift_down(arr, 0, end - 1)
+    yield "sorted", 0, n - 1
+`
+},
+{
+    id: 'tim', group: 'Efficient (O(n log n))', name: 'Tim Sort (simplified)',
+    time: 'O(n log n), O(n) best', space: 'O(n)', stable: true,
+    desc: 'Insertion-sorts 16-element runs, then merges them: the idea behind Python\'s built-in sorted().',
+    code: `def _merge(arr, lo, mid, hi):
+    left = arr[lo:mid]
+    right = arr[mid:hi]
+    i = j = 0
+    k = lo
+    while i < len(left) and j < len(right):
+        yield "compare", lo + i, mid + j
+        if left[i] <= right[j]:
+            arr[k] = left[i]
+            i += 1
+        else:
+            arr[k] = right[j]
+            j += 1
+        yield "set", k, arr[k]
+        k += 1
+    while i < len(left):
+        arr[k] = left[i]
+        yield "set", k, arr[k]
+        i += 1
+        k += 1
+    while j < len(right):
+        arr[k] = right[j]
+        yield "set", k, arr[k]
+        j += 1
+        k += 1
+
+
+def tim_sort(arr):
+    n = len(arr)
+    RUN = 16
+    for lo in range(0, n, RUN):
+        hi = min(lo + RUN, n)
+        for i in range(lo + 1, hi):
+            j = i
+            while j > lo:
+                yield "compare", j - 1, j
+                if arr[j - 1] > arr[j]:
+                    arr[j - 1], arr[j] = arr[j], arr[j - 1]
+                    yield "swap", j - 1, j
+                    j -= 1
+                else:
+                    break
+    width = RUN
+    while width < n:
+        for lo in range(0, n, 2 * width):
+            mid = min(lo + width, n)
+            hi = min(lo + 2 * width, n)
+            if mid < hi:
+                yield from _merge(arr, lo, mid, hi)
+        width *= 2
+    yield "sorted", 0, n - 1
+`
+},
+{
+    id: 'counting', group: 'Non-comparison', name: 'Counting Sort',
+    time: 'O(n + k)', space: 'O(k)', stable: true,
+    desc: 'Counts how often each value occurs, then rewrites the array. Zero comparisons between elements.',
+    code: `def counting_sort(arr):
+    if not arr:
+        return
+    lo, hi = min(arr), max(arr)
+    counts = [0] * (hi - lo + 1)
+    for i, v in enumerate(arr):
+        counts[v - lo] += 1
+        yield "pivot", i
+    k = 0
+    for v, c in enumerate(counts):
+        for _ in range(c):
+            arr[k] = v + lo
+            yield "set", k, arr[k]
+            k += 1
+    yield "sorted", 0, len(arr) - 1
+`
+},
+{
+    id: 'radix', group: 'Non-comparison', name: 'Radix Sort (LSD, base 10)',
+    time: 'O(d·(n + 10))', space: 'O(n)', stable: true,
+    desc: 'Sorts digit by digit, least significant first, using stable bucket passes. Non-negative integers only.',
+    code: `def radix_sort(arr):
+    if not arr:
+        return
+    exp = 1
+    biggest = max(arr)
+    while biggest // exp > 0:
+        buckets = [[] for _ in range(10)]
+        for i, v in enumerate(arr):
+            buckets[(v // exp) % 10].append(v)
+            yield "pivot", i
+        k = 0
+        for bucket in buckets:
+            for v in bucket:
+                arr[k] = v
+                yield "set", k, v
+                k += 1
+        exp *= 10
+    yield "sorted", 0, len(arr) - 1
+`
+},
+{
+    id: 'bucket', group: 'Non-comparison', name: 'Bucket Sort',
+    time: 'O(n + k) avg', space: 'O(n)', stable: true,
+    desc: 'Scatters values into about sqrt(n) range buckets, sorts each bucket, and concatenates.',
+    code: `def bucket_sort(arr):
+    n = len(arr)
+    if n < 2:
+        return
+    lo, hi = min(arr), max(arr)
+    k = max(1, int(n ** 0.5))
+    buckets = [[] for _ in range(k)]
+    for i, v in enumerate(arr):
+        idx = min(k - 1, int((v - lo) / (hi - lo + 1) * k))
+        buckets[idx].append(v)
+        yield "pivot", i
+    pos = 0
+    for bucket in buckets:
+        bucket.sort()
+        for v in bucket:
+            arr[pos] = v
+            yield "set", pos, v
+            pos += 1
+    yield "sorted", 0, n - 1
+`
+},
+{
+    id: 'cycle', group: 'Non-comparison', name: 'Cycle Sort',
+    time: 'O(n²)', space: 'O(1)', stable: false,
+    desc: 'Drops each element straight into its final position. Provably minimal number of writes.',
+    code: `def cycle_sort(arr):
+    n = len(arr)
+    for start in range(n - 1):
+        item = arr[start]
+        pos = start
+        for i in range(start + 1, n):
+            yield "compare", start, i
+            if arr[i] < item:
+                pos += 1
+        if pos == start:
+            continue
+        while item == arr[pos]:
+            pos += 1
+        arr[pos], item = item, arr[pos]
+        yield "set", pos, arr[pos]
+        while pos != start:
+            pos = start
+            for i in range(start + 1, n):
+                yield "compare", start, i
+                if arr[i] < item:
+                    pos += 1
+            while item == arr[pos]:
+                pos += 1
+            arr[pos], item = item, arr[pos]
+            yield "set", pos, arr[pos]
+    yield "sorted", 0, n - 1
+`
+},
+{
+    id: 'pancake', group: 'Exotic & Slow', name: 'Pancake Sort',
+    time: 'O(n²)', space: 'O(1)', stable: false,
+    desc: 'The only allowed move is flipping a prefix, like a spatula under a stack of pancakes.',
+    code: `def _flip(arr, k):
+    i = 0
+    while i < k:
+        arr[i], arr[k] = arr[k], arr[i]
+        yield "swap", i, k
+        i += 1
+        k -= 1
+
+
+def pancake_sort(arr):
+    for size in range(len(arr), 1, -1):
+        m = 0
+        for i in range(1, size):
+            yield "compare", m, i
+            if arr[i] > arr[m]:
+                m = i
+        if m != size - 1:
+            if m != 0:
+                yield from _flip(arr, m)
+            yield from _flip(arr, size - 1)
+        yield "sorted", size - 1
+    yield "sorted", 0, len(arr) - 1
+`
+},
+{
+    id: 'stooge', group: 'Exotic & Slow', name: 'Stooge Sort',
+    time: 'O(n^2.71)', space: 'O(log n)', stable: false, size: 40,
+    desc: 'Sort the first 2/3, then the last 2/3, then the first 2/3 again. Gloriously inefficient. Size lowered automatically.',
+    code: `def _stooge(arr, lo, hi):
+    yield "compare", lo, hi
+    if arr[lo] > arr[hi]:
+        arr[lo], arr[hi] = arr[hi], arr[lo]
+        yield "swap", lo, hi
+    if hi - lo + 1 > 2:
+        t = (hi - lo + 1) // 3
+        yield from _stooge(arr, lo, hi - t)
+        yield from _stooge(arr, lo + t, hi)
+        yield from _stooge(arr, lo, hi - t)
+
+
+def stooge_sort(arr):
+    if arr:
+        yield from _stooge(arr, 0, len(arr) - 1)
+    yield "sorted", 0, len(arr) - 1
+`
+},
+{
+    id: 'slow', group: 'Exotic & Slow', name: 'Slow Sort (multiply & surrender)',
+    time: 'Ω(n^(log n / (2+ε)))', space: 'O(n)', stable: false, size: 20,
+    desc: 'A deliberately pessimal algorithm from a paper on "pessimal algorithms". Size lowered automatically.',
+    code: `def _slow(arr, i, j):
+    if i >= j:
+        return
+    m = (i + j) // 2
+    yield from _slow(arr, i, m)
+    yield from _slow(arr, m + 1, j)
+    yield "compare", m, j
+    if arr[m] > arr[j]:
+        arr[m], arr[j] = arr[j], arr[m]
+        yield "swap", m, j
+    yield from _slow(arr, i, j - 1)
+
+
+def slow_sort(arr):
+    yield from _slow(arr, 0, len(arr) - 1)
+    yield "sorted", 0, len(arr) - 1
+`
+},
+{
+    id: 'bogo', group: 'Exotic & Slow', name: 'Bogo Sort (shuffle until sorted)',
+    time: 'O((n+1)!)', space: 'O(1)', stable: false, size: 6,
+    desc: 'Shuffles randomly until the array happens to be sorted. Keep the size at 8 or below or you may hit the step limit.',
+    code: `import random
+
+
+def _is_sorted(arr):
+    return all(arr[i] <= arr[i + 1] for i in range(len(arr) - 1))
+
+
+def bogo_sort(arr):
+    n = len(arr)
+    while not _is_sorted(arr):
+        for i in range(n - 1, 0, -1):
+            j = random.randint(0, i)
+            arr[i], arr[j] = arr[j], arr[i]
+            yield "swap", i, j
+    yield "sorted", 0, n - 1
+`
+},
+{
+    id: 'builtin', group: 'Exotic & Slow', name: "Python's built-in list.sort()",
+    time: 'O(n log n)', space: 'O(n)', stable: true,
+    desc: 'No yields at all: the visualizer just animates the final result so you can see non-generator code works too.',
+    code: `def builtin_sort(arr):
+    # Not a generator: nothing is yielded, so the visualizer animates
+    # the end result by writing every position that changed.
+    arr.sort()
+`
+},
+{
+    id: 'wick', group: 'Made by Wick', name: "wicksort",
+    time: 'idk', space: 'idk', stable: true,
+    desc: 'Chooses sort style depending on size of list, and uses heavily optimized sorting methods.',
+    code: `def adaptive_hybrid_sort(arr):
+    n = len(arr)
+    if n <= 16:
+        for i in range(1, n):
+            key = arr[i]
+            j = i - 1
+            yield "pivot", i
+            while j >= 0 and arr[j] > key:
+                yield "compare", j, j + 1
+                arr[j + 1] = arr[j]
+                yield "set", j + 1, arr[j]
+                j -= 1
+            arr[j + 1] = key
+            yield "set", j + 1, key
+        for i in range(n):
+            yield "sorted", i
+        return
+    max_val = max(arr) if arr else 0
+    exp = 1
+    while max_val // exp > 0:
+        buckets = [[] for _ in range(10)]
+        for i in range(n):
+            yield "pivot", i
+            digit = (arr[i] // exp) % 10
+            buckets[digit].append((arr[i], i))
+        idx = 0
+        for b_idx, bucket in enumerate(buckets):
+            for val, original_pos in bucket:
+                yield "compare", idx, original_pos
+                arr[idx] = val
+                yield "set", idx, val
+                idx += 1
+        exp *= 10
+    yield "sorted", 0, n - 1
+`
+},
+{
+    id: 'wick-o', group: 'Made by Wick', name: "wicksort (optimized)",
+    time: 'idk', space: 'idk', stable: true,
+    desc: 'Chooses sort style depending on size of list, and uses heavily optimized sorting methods.',
+    code: `def wicksort_optimized(arr):
+    n = len(arr)
+    if n <= 1:
+        return
+    min_val = max_val = arr[0]
+    for i in range(1, n):
+        val = arr[i]
+        if val < min_val: min_val = val
+        if val > max_val: max_val = val
+    val_range = max_val - min_val + 1
+    if val_range <= n * 2:
+        count = [0] * val_range
+        for i in range(n):
+            yield "pivot", i
+            count[arr[i] - min_val] += 1
+        idx = 0
+        for i in range(val_range):
+            while count[i] > 0:
+                yield "set", idx, i + min_val
+                arr[idx] = i + min_val
+                count[i] -= 1
+                idx += 1
+        yield "sorted", 0, n - 1
+        return
+    max_bits = max_val.bit_length()
+    shift = 0
+    while shift < max_bits:
+        buckets = [[] for _ in range(256)]
+        for i in range(n):
+            yield "pivot", i
+            idx_bucket = (arr[i] >> shift) & 255
+            buckets[idx_bucket].append(arr[i])
+        idx = 0
+        for bucket in buckets:
+            for val in bucket:
+                yield "set", idx, val
+                arr[idx] = val
+                idx += 1
+        shift += 8
+    yield "sorted", 0, n - 1
+`
+},
+{
+    id: "solo", group: 'Not made by wick', name: "solosort",
+    time: 'idk', space: 'idk', stable: true,
+    desc: 'solomon made this',
+    code: `def solosort(arr):
+    for i in range(len(arr)):
+        for i in range(len(arr) - 1):
+            if arr[i] > arr[i+1]:
+                arr[i], arr[i+1] = arr[i+1], arr[i]
+`
+}
+];
+/* PRESETS-END */
+
+// ====================================================================
+//  DOM
+// ====================================================================
+const $ = (id) => document.getElementById(id);
+const el = {
+    preset: $('preset'), meta: $('preset-meta'), code: $('code'), error: $('error'), errorText: $('error-text'),
+    canvas: $('stage'), msg: $('msg'), play: $('play'), prev: $('prev'), next: $('next'), reset: $('reset'),
+    shuffle: $('shuffle'), scrub: $('scrub'), size: $('size'), sizeVal: $('size-val'), speed: $('speed'),
+    speedVal: $('speed-val'), type: $('array-type'), color: $('color-mode'), sound: $('sound'), engine: $('engine'),
+    sCmp: $('s-cmp'), sSwap: $('s-swap'), sSet: $('s-set'), sStep: $('s-step'), sPy: $('s-py')
+};
+const ctx = el.canvas.getContext('2d');
+
+const highlightEl = $('code-highlight');
+const lineCountEl = $('line-count');
+const PY_KEYWORDS = new Set(('and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield').split(' '));
+const PY_BUILTINS = new Set(('abs all any ascii bin bool breakpoint bytearray bytes callable chr classmethod compile complex delattr dict dir divmod enumerate eval filter float format frozenset getattr globals hasattr hash help hex id input int isinstance issubclass iter len list locals map max memoryview min next object oct open ord pow print property range repr reversed round set setattr slice sorted staticmethod str sum super tuple type vars zip __import__').split(' '));
+function escapeHTML(value) { return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function highlightPython(source) {
+    const token = /(#.*$|\x27{3}[\s\S]*?\x27{3}|\\x22{3}[\\s\\S]*?\\x22{3}|'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"|\b\d+(?:\.\d+)?\b|@[A-Za-z_]\w*|\b[A-Za-z_]\w*\b|(?:==|!=|<=|>=|\+=|-=|\*=|\/=|\*\*|\/\/|->|:=|[-+*/%=<>!&|^~]))/gm;
+    let out = '', last = 0, match;
+    while ((match = token.exec(source))) {
+        out += escapeHTML(source.slice(last, match.index));
+        const t = match[0]; let cls = '';
+        if (t.startsWith('#')) cls = 'py-comment';
+        else if (/^(?:\\x27{3}|\\x22{3}|'|")/.test(t)) cls = 'py-string';
+        else if (/^\d/.test(t)) cls = 'py-number';
+        else if (t[0] === '@') cls = 'py-decorator';
+        else if (PY_KEYWORDS.has(t)) cls = 'py-keyword';
+        else if (PY_BUILTINS.has(t)) cls = 'py-builtin';
+        else if (/^(?:==|!=|<=|>=|\+=|-=|\*=|\/=|\*\*|\/\/|->|:=|[-+*/%=<>!&|^~])$/.test(t)) cls = 'py-operator';
+        else if (/\bdef\s+$/.test(source.slice(Math.max(0, match.index - 5), match.index))) cls = 'py-function';
+        out += cls ? '<span class="' + cls + '">' + escapeHTML(t) + '</span>' : escapeHTML(t);
+        last = token.lastIndex;
+    }
+    out += escapeHTML(source.slice(last));
+    return out + (source.endsWith('\n') ? ' ' : '\n');
+}
+function syncCodeHighlight() {
+    if (!highlightEl || !el.code) return;
+    highlightEl.innerHTML = highlightPython(el.code.value);
+    highlightEl.scrollTop = el.code.scrollTop;
+    highlightEl.scrollLeft = el.code.scrollLeft;
+    if (lineCountEl) { const n = Math.max(1, el.code.value.split('\n').length); lineCountEl.textContent = n + (n === 1 ? ' line' : ' lines'); }
+}
+el.code.addEventListener('scroll', () => {
+    highlightEl.scrollTop = el.code.scrollTop;
+    highlightEl.scrollLeft = el.code.scrollLeft;
+});
+
+
+// ====================================================================
+//  State
+// ====================================================================
+const TIMEOUT_MS = 15000;
+const S = {
+    initial: [], values: [], maxVal: 1,
+    trans: new Uint8Array(0), done: new Uint8Array(0), pivot: -1, touch: 0,
+    events: null, total: 0, pos: 0, final: null,
+    counts: { cmp: 0, swap: 0, set: 0 }, pyMs: null,
+    state: 'idle',            // idle | computing | playing | paused | sweep | finished
+    acc: 0, lastT: 0, looping: false, token: 0, sweep: 0, userSize: 64, raf: 0
+};
+let worker = null, pending = null, engineReady = false;
+let cssW = 600, cssH = 360;
+
+// ====================================================================
+//  Utilities
+// ====================================================================
+const fmt = (n) => n.toLocaleString();
+function isSorted(a) { for (let i = 1; i < a.length; i++) if (a[i - 1] > a[i]) return false; return true; }
+function shuffleInPlace(a) {
+    for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+}
+function makeArray(n, type) {
+    const seq = Array.from({ length: n }, (_, i) => i + 1);
+    switch (type) {
+        case 'dupes': return seq.map(() => 1 + Math.floor(Math.random() * n));
+        case 'few': {
+            const levels = 5;
+            return seq.map(() => Math.max(1, Math.round((1 + Math.floor(Math.random() * levels)) * n / levels)));
+        }
+        case 'nearly': {
+            const swaps = Math.max(3, Math.round(n * 0.05));
+            for (let k = 0; k < swaps; k++) {
+                const i = Math.floor(Math.random() * n), j = Math.floor(Math.random() * n);
+                [seq[i], seq[j]] = [seq[j], seq[i]];
+            }
+            return seq;
+        }
+        case 'reversed': return seq.reverse();
+        case 'sorted': return seq;
+        case 'organ': {
+            const left = seq.filter((_, i) => i % 2 === 0), right = seq.filter((_, i) => i % 2 === 1).reverse();
+            return left.concat(right);
+        }
+        default: return shuffleInPlace(seq);
+    }
+}
+
+// ====================================================================
+//  Rendering
+// ====================================================================
+const MARK_COLORS = [null, '#ef4444', '#f59e0b', '#a78bfa'];
+const PIVOT_COLOR = '#e879f9', DONE_COLOR = '#10b981';
+let palette = [];
+function buildPalette() {
+    const mode = el.color.value;
+    palette = Array.from({ length: 256 }, (_, i) => {
+        const t = i / 255;
+        if (mode === 'rainbow') return `hsl(${Math.round(t * 300)} 80% 55%)`;
+        if (mode === 'gradient') return `hsl(${Math.round(200 + t * 140)} 85% ${Math.round(58 - t * 6)}%)`;
+        return `hsl(199 92% ${Math.round(48 + t * 12)}%)`;
+    });
+}
+function resizeCanvas() {
+    const r = el.canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    cssW = r.width; cssH = r.height;
+    el.canvas.width = Math.max(1, Math.round(r.width * dpr));
+    el.canvas.height = Math.max(1, Math.round(r.height * dpr));
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    redraw();
+}
+function draw() {
+    const W = cssW, H = cssH, vals = S.values, n = vals.length;
+    ctx.clearRect(0, 0, W, H);
+    if (!n) return;
+    const bw = W / n, gap = bw >= 4 ? 1 : 0, usable = H - 8, max = S.maxVal;
+    for (let i = 0; i < n; i++) {
+        const x = Math.floor(i * bw);
+        const w = Math.max(1, Math.floor((i + 1) * bw) - x - gap);
+        const h = Math.max(2, Math.min(usable, (vals[i] / max) * usable));
+        const m = S.trans[i];
+        let c;
+        if (m) c = MARK_COLORS[m];
+        else if (i === S.pivot) c = PIVOT_COLOR;
+        else if (S.done[i]) c = DONE_COLOR;
+        else c = palette[Math.max(0, Math.min(255, Math.floor((vals[i] / max) * 255)))];
+        ctx.fillStyle = c;
+        ctx.fillRect(x, H - h, w, h);
+    }
+}
+function redraw() {
+    if (S.raf) return;
+    S.raf = requestAnimationFrame(() => { S.raf = 0; draw(); });
+}
+
+// ====================================================================
+//  Sound
+// ====================================================================
+let actx = null;
+function ensureAudio() {
+    if (!el.sound.checked) return;
+    if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { actx = null; } }
+    if (actx && actx.state === 'suspended') actx.resume();
+}
+function beep(val) {
+    if (!el.sound.checked || !actx || typeof val !== 'number') return;
+    const o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime;
+    o.type = 'triangle';
+    o.frequency.value = 180 + Math.max(0, Math.min(1, val / S.maxVal)) * 1100;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.06, t + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+    o.connect(g); g.connect(actx.destination);
+    o.start(t); o.stop(t + 0.07);
+}
+
+// ====================================================================
+//  Event replay
+// ====================================================================
+function applyEvent(p, mark) {
+    const e = S.events, i = p * 3, t = e[i], a = e[i + 1], b = e[i + 2];
+    const v = S.values, n = v.length;
+    const okA = a >= 0 && a < n, okB = b >= 0 && b < n;
+    switch (t) {
+        case 0:
+            S.counts.cmp++;
+            if (mark) { if (okA) S.trans[a] = 1; if (okB) S.trans[b] = 1; }
+            if (okA) S.touch = a;
+            break;
+        case 1:
+            S.counts.swap++;
+            if (okA && okB) { const x = v[a]; v[a] = v[b]; v[b] = x; }
+            if (mark) { if (okA) S.trans[a] = 2; if (okB) S.trans[b] = 2; }
+            if (okA) S.touch = a;
+            break;
+        case 2:
+            S.counts.set++;
+            if (okA) { v[a] = b; S.touch = a; if (mark) S.trans[a] = 3; }
+            break;
+        case 3:
+            S.pivot = okA ? a : -1;
+            break;
+        case 4: {
+            const lo = Math.max(a, 0), hi = Math.min(b < 0 ? a : b, n - 1);
+            for (let k = lo; k <= hi; k++) S.done[k] = 1;
+            break;
+        }
+    }
+}
+function seek(target) {
+    target = Math.max(0, Math.min(S.total, target));
+    S.values = S.initial.slice();
+    S.trans.fill(0); S.done.fill(0); S.pivot = -1;
+    S.counts = { cmp: 0, swap: 0, set: 0 };
+    for (let p = 0; p < target; p++) applyEvent(p, p >= target - 4);
+    S.pos = target;
+    redraw(); updateStats();
+}
+
+// ====================================================================
+//  UI helpers
+// ====================================================================
+let lastMsg = '';
+function setMsg(text, kind) {
+    if (text === lastMsg && !kind) return;
+    lastMsg = text;
+    el.msg.textContent = text;
+    el.msg.className = kind || '';
+}
+function updateStats() {
+    el.sCmp.textContent = fmt(S.counts.cmp);
+    el.sSwap.textContent = fmt(S.counts.swap);
+    el.sSet.textContent = fmt(S.counts.set);
+    el.sStep.textContent = fmt(S.pos) + ' / ' + fmt(S.total);
+    el.sPy.textContent = S.pyMs == null ? '\u2013' : S.pyMs + ' ms';
+    el.scrub.value = S.pos;
+}
+function stepsPerSec() { return 5 * Math.pow(10, (+el.speed.value) / 100 * 4); }
+function updateSpeedLabel() {
+    const r = stepsPerSec();
+    el.speedVal.textContent = r >= 1000 ? (r / 1000).toFixed(1) + 'k steps/s' : Math.round(r) + ' steps/s';
+}
+function showError(text) { el.errorText.textContent = text; el.error.classList.remove('hidden'); }
+function clearError() { el.error.classList.add('hidden'); el.errorText.textContent = ''; }
+
+function setState(s, message, kind) {
+    S.state = s;
+    const hasEvents = !!S.events;
+    let label = '\u25B6 Run';
+    if (s === 'computing') label = '\u23F9 Cancel';
+    else if (s === 'playing') label = '\u23F8 Pause';
+    else if (s === 'paused') label = S.pos > 0 ? '\u25B6 Resume' : '\u25B6 Run';
+    else if (s === 'sweep') label = '\u2026';
+    else if (s === 'finished') label = '\u21BB Replay';
+    el.play.textContent = label;
+    el.play.disabled = (!engineReady && (s === 'idle')) || s === 'sweep';
+    el.next.disabled = !engineReady && !hasEvents || s === 'computing' || s === 'sweep';
+    el.prev.disabled = !hasEvents || s === 'computing' || s === 'sweep';
+    el.scrub.disabled = !hasEvents || s === 'computing' || s === 'sweep';
+    if (message !== undefined) setMsg(message, kind);
+    else if (s === 'idle') setMsg(engineReady ? 'Ready' : 'Waiting for Python\u2026');
+    else if (s === 'computing') setMsg('Running your Python\u2026');
+    else if (s === 'paused') setMsg(S.pos > 0 ? 'Paused' : fmt(S.total) + ' steps ready');
+}
+
+// ====================================================================
+//  Arrays
+// ====================================================================
+function newArray() {
+    const n = +el.size.value;
+    S.initial = makeArray(n, el.type.value);
+    S.maxVal = Math.max(1, ...S.initial);
+    S.trans = new Uint8Array(n);
+    S.done = new Uint8Array(n);
+    invalidate();
+}
+function invalidate() {
+    if (S.state === 'computing') cancelCompute(true);
+    S.token++;
+    S.events = null; S.total = 0; S.pos = 0; S.final = null; S.pyMs = null;
+    el.scrub.max = 0; el.scrub.value = 0;
+    setState('idle');
+    seek(0);
+}
+
+// ====================================================================
+//  Python worker
+// ====================================================================
+function setEngine(kind, text) {
+    el.engine.className = kind === 'ready' ? 'ready' : kind === 'error' ? 'error' : '';
+    el.engine.textContent = text;
+}
+function startWorker() {
+    engineReady = false;
+    setEngine('loading', '\u23F3 Loading Python (Pyodide)\u2026');
+    try {
+        const src = $('worker-src').textContent;
+        const url = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
+        worker = new Worker(url);
+    } catch (err) {
+        setEngine('error', '\u274C Could not start the Python worker: ' + err.message);
+        return;
+    }
+    worker.onmessage = (e) => {
+        const m = e.data;
+        if (m.type === 'ready') {
+            engineReady = true;
+            setEngine('ready', '\uD83D\uDC0D Python ready');
+            setState(S.state);
+        } else if (m.type === 'fatal') {
+            setEngine('error', '\u274C Python failed to load: ' + m.message + ' (are you online?)');
+        } else if (m.type === 'result' && pending) {
+            const p = pending; pending = null; p(m);
+        }
+    };
+    worker.onerror = (e) => setEngine('error', '\u274C Worker error: ' + (e.message || 'unknown'));
+    worker.postMessage({ type: 'init', harness: $('py-harness').textContent });
+    setState(S.state);
+}
+function restartWorker() {
+    try { worker.terminate(); } catch (e) { /* ignore */ }
+    pending = null;
+    startWorker();
+}
+function runInWorker(code, data) {
+    return new Promise((resolve) => {
+        pending = resolve;
+        worker.postMessage({ type: 'run', code, data });
+    });
+}
+function cancelCompute(silent) {
+    S.token++;
+    restartWorker();
+    if (!silent) setState('idle', 'Cancelled');
+}
+
+async function compute() {
+    const token = ++S.token;
+    clearError();
+    setState('computing');
+    const timer = setTimeout(() => {
+        if (S.token !== token) return;
+        S.token++;
+        restartWorker();
+        showError('\u23F1 Timed out after ' + (TIMEOUT_MS / 1000) + ' s \u2013 is there an infinite loop? (The Python worker was restarted.)');
+        setState('idle', 'Timed out');
+    }, TIMEOUT_MS);
+    const res = await runInWorker(el.code.value, S.initial);
+    clearTimeout(timer);
+    if (S.token !== token) return false;
+    if (!res.ok) {
+        showError(res.error);
+        setState('idle', 'Error in your code');
+        return false;
+    }
+    S.events = res.events;
+    S.total = res.events.length / 3;
+    S.final = res.final;
+    S.pyMs = res.ms;
+    S.pos = 0;
+    el.scrub.max = S.total; el.scrub.value = 0;
+    seek(0);
+    setState('paused');
+    return true;
+}
+async function ensureEvents() {
+    if (S.events) return true;
+    if (!engineReady) return false;
+    return compute();
+}
+
+// ====================================================================
+//  Playback
+// ====================================================================
+function startPlay() {
+    ensureAudio();
+    setState('playing', 'Sorting\u2026');
+    S.lastT = performance.now();
+    S.acc = 0;
+    if (!S.looping) { S.looping = true; requestAnimationFrame(frame); }
+}
+function pause() { setState('paused'); }
+
+function frame(t) {
+    if (S.state === 'playing') {
+        const dt = Math.min(0.1, (t - S.lastT) / 1000);
+        S.lastT = t;
+        S.acc += dt * stepsPerSec();
+        const steps = Math.floor(S.acc);
+        S.acc -= steps;
+        if (steps > 0 && S.pos < S.total) {
+            S.trans.fill(0);
+            const end = Math.min(S.total, S.pos + steps);
+            while (S.pos < end) { applyEvent(S.pos, S.pos >= end - 6); S.pos++; }
+            beep(S.values[S.touch]);
+            setMsg('Sorting\u2026 ' + Math.floor(S.pos / Math.max(1, S.total) * 100) + '%');
+        }
+        if (S.pos >= S.total) finishPlayback();
+    } else if (S.state === 'sweep') {
+        sweepStep();
+    } else {
+        S.looping = false;
+        return;
+    }
+    draw();
+    updateStats();
+    requestAnimationFrame(frame);
+}
+
+function finishPlayback() {
+    const real = S.final, v = S.values;
+    const match = real.length === v.length && real.every((x, i) => x === v[i]);
+    const sorted = isSorted(real);
+    S.trans.fill(0);
+    if (!match) {
+        S.values = real.slice();
+        if (sorted) S.done.fill(1);
+        setState('finished', '\u26A0\uFE0F Yielded events don\'t match what your code really did (missing a yield?). Showing the real result.', 'warn');
+        return;
+    }
+    if (!sorted) {
+        setState('finished', '\u26A0\uFE0F Finished, but the array is NOT sorted', 'warn');
+        return;
+    }
+    const msg = '\u2705 Sorted \u00B7 ' + fmt(S.counts.cmp) + ' comparisons \u00B7 ' + fmt(S.counts.swap) + ' swaps \u00B7 ' + fmt(S.counts.set) + ' writes';
+    S.trans.fill(0); S.done.fill(0); S.pivot = -1; S.sweep = 0;
+    setState('sweep', msg, 'ok');
+    if (!S.looping) { S.looping = true; requestAnimationFrame(frame); }
+}
+function sweepStep() {
+    const n = S.values.length, per = Math.max(1, Math.ceil(n / 70));
+    const end = Math.min(n, S.sweep + per);
+    for (; S.sweep < end; S.sweep++) S.done[S.sweep] = 1;
+    beep(S.values[end - 1]);
+    if (S.sweep >= n) setState('finished', lastMsg, 'ok');
+}
+
+// ====================================================================
+//  Presets
+// ====================================================================
+function buildPresetMenu() {
+    const groups = [];
+    PRESETS.forEach((p) => {
+        let g = groups.find((x) => x.name === p.group);
+        if (!g) { g = { name: p.group, items: [] }; groups.push(g); }
+        g.items.push(p);
+    });
+    el.preset.innerHTML = '';
+    groups.forEach((g) => {
+        const og = document.createElement('optgroup');
+        og.label = g.name;
+        g.items.forEach((p) => {
+            const o = document.createElement('option');
+            o.value = p.id; o.textContent = p.name;
+            og.appendChild(o);
+        });
+        el.preset.appendChild(og);
+    });
+    const custom = document.createElement('option');
+    custom.value = 'custom'; custom.textContent = '\u270F\uFE0F Custom (your edits)';
+    el.preset.appendChild(custom);
+}
+function renderMeta(p) {
+    el.meta.textContent = '';
+    if (!p) {
+        el.meta.textContent = 'Your own code. See the Visualizer API below for what you can yield.';
+        return;
+    }
+    const d = document.createElement('div');
+    d.textContent = p.desc;
+    el.meta.appendChild(d);
+    const chips = document.createElement('div');
+    chips.className = 'chips';
+    [['Time ', p.time], ['Space ', p.space], [p.stable ? 'Stable' : 'Unstable', '']].forEach(([a, b]) => {
+        const c = document.createElement('span');
+        c.className = 'chip'; c.textContent = a + b;
+        chips.appendChild(c);
+    });
+    el.meta.appendChild(chips);
+}
+function loadPreset(id) {
+    const p = PRESETS.find((x) => x.id === id);
+    if (!p) return;
+    el.code.value = p.code;
+    syncCodeHighlight();
+    renderMeta(p);
+    clearError();
+    const target = p.size || S.userSize;
+    if (+el.size.value !== target) {
+        el.size.value = target;
+        el.sizeVal.textContent = target;
+        newArray();
+    } else {
+        invalidate();
+    }
+}
+function onCodeEdit() {
+    syncCodeHighlight();
+    if (el.preset.value !== 'custom') { el.preset.value = 'custom'; renderMeta(null); }
+    invalidate();
+}
+
+// ====================================================================
+//  Event wiring
+// ====================================================================
+el.preset.addEventListener('change', () => {
+    if (el.preset.value === 'custom') { renderMeta(null); return; }
+    loadPreset(el.preset.value);
+});
+el.code.addEventListener('input', onCodeEdit);
+el.code.addEventListener('keydown', (e) => {
+    const c = el.code;
+    if (e.key === 'Tab') {
+        e.preventDefault();
+        const s = c.selectionStart, en = c.selectionEnd;
+        if (e.shiftKey) {
+            const ls = c.value.lastIndexOf('\n', s - 1) + 1;
+            const m = /^ {1,4}/.exec(c.value.slice(ls));
+            if (m) {
+                c.setRangeText('', ls, ls + m[0].length, 'preserve');
+                c.selectionStart = Math.max(ls, s - m[0].length);
+                c.selectionEnd = Math.max(ls, en - m[0].length);
+            }
+        } else {
+            c.setRangeText('    ', s, en, 'end');
+        }
+        onCodeEdit();
+    } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        el.play.click();
+    } else if (e.key === 'Enter' && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        const s = c.selectionStart;
+        const ls = c.value.lastIndexOf('\n', s - 1) + 1;
+        const line = c.value.slice(ls, s);
+        let indent = /^ */.exec(line)[0];
+        if (/:\s*$/.test(line)) indent += '    ';
+        c.setRangeText('\n' + indent, s, c.selectionEnd, 'end');
+        onCodeEdit();
+    }
+});
+
+el.play.addEventListener('click', async () => {
+    switch (S.state) {
+        case 'idle': if (await ensureEvents()) startPlay(); break;
+        case 'computing': cancelCompute(false); break;
+        case 'playing': pause(); break;
+        case 'paused': startPlay(); break;
+        case 'finished': seek(0); startPlay(); break;
+    }
+});
+el.next.addEventListener('click', async () => {
+    if (S.state === 'playing') pause();
+    if (S.state === 'sweep' || S.state === 'computing') return;
+    if (!(await ensureEvents())) return;
+    if (S.state === 'finished') seek(S.total - 1);
+    if (S.pos >= S.total) return;
+    S.trans.fill(0);
+    applyEvent(S.pos, true);
+    S.pos++;
+    beep(S.values[S.touch]);
+    setState('paused');
+    if (S.pos >= S.total) finishPlayback();
+    draw(); updateStats();
+});
+el.prev.addEventListener('click', () => {
+    if (!S.events || S.state === 'sweep' || S.state === 'computing') return;
+    if (S.state === 'playing') pause();
+    seek(S.pos - 1);
+    setState('paused');
+});
+el.reset.addEventListener('click', () => {
+    if (S.state === 'computing') cancelCompute(true);
+    if (S.events) { seek(0); setState('paused'); } else { seek(0); setState('idle'); }
+});
+el.shuffle.addEventListener('click', newArray);
+el.scrub.addEventListener('input', () => {
+    if (!S.events || S.state === 'sweep') return;
+    seek(+el.scrub.value);
+    setState('paused');
+});
+el.size.addEventListener('input', () => {
+    S.userSize = +el.size.value;
+    el.sizeVal.textContent = el.size.value;
+    newArray();
+});
+el.speed.addEventListener('input', updateSpeedLabel);
+el.type.addEventListener('change', newArray);
+el.color.addEventListener('change', () => { buildPalette(); redraw(); });
+el.sound.addEventListener('change', ensureAudio);
+new ResizeObserver(resizeCanvas).observe(el.canvas.parentElement);
+
+// ====================================================================
+//  Init
+// ====================================================================
+buildPresetMenu();
+buildPalette();
+updateSpeedLabel();
+el.preset.value = 'bubble';
+el.code.value = PRESETS.find((p) => p.id === 'bubble').code;
+syncCodeHighlight();
+renderMeta(PRESETS.find((p) => p.id === 'bubble'));
+resizeCanvas();
+newArray();
+startWorker();
+</script>
+</body>
+</html>
+
