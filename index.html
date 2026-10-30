@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" href="data:," />
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="A web playground for visualizing and racing sorting algorithms, with a Python editor.">
+<meta name="description" content="A web playground for visualizing sorting algorithms in Python and compiling C/C++ programs.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Comic+Neue:ital,wght@0,300;0,400;0,700;1,300;1,400;1,700&display=swap" rel="stylesheet">
@@ -104,6 +104,12 @@ input[type=range] { accent-color: #9da5ff; cursor: pointer; width: 100%; }
 #preset-meta { margin: 6px 0 10px; font-size: 15px; color: #d0cfdb; line-height: 1.4; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .chip { background: #3a3a44; border: 1px solid #77778f; color: #efedff; border-radius: 7px; padding: 1px 9px; font-size: 13px; }
+.code-label-row { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.code-tools { display:flex; align-items:center; gap:6px; }
+.lanes.native-single .lane:not(.active) { display:none; }
+.native-output { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 260px; overflow: auto; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--editor); color: var(--text); min-height: 48px; }
+.muted { color: var(--muted); font-size: 13px; line-height: 1.4; }
+#language-select { max-width: 190px; }
 .custom-bar { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 8px; }
 .name-row { display: flex; gap: 6px; margin-bottom: 8px; align-items: center; }
 .name-row input[type=text] {
@@ -143,6 +149,10 @@ textarea#code::selection { background: rgba(113,126,233,.48); -webkit-text-fill-
 .py-operator { color: #d7b5ff; }
 .py-decorator { color: #ff9eb5; }
 .py-self { color: #f2a8cf; }
+/* C and C++ reuse the Python editor palette for a consistent editor. */
+.py-preprocessor { color: #ff9eb5; }
+.py-type { color: #79dce8; }
+.py-constant { color: #f4bd83; }
 #error {
     margin-top: 10px; background: #512b32; border: 1px solid #c96b7a; color: #ffd0d6;
     border-radius: 10px; padding: 10px 12px; font-size: 14px;
@@ -263,6 +273,11 @@ dialog::backdrop { background: rgba(10,10,14,.7); }
     button, select { transition: background .16s ease, border-color .16s ease, transform .12s ease; }
     @keyframes pop-in { from { opacity: .6; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
 }
+
+.native-toggle-row{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;margin:0 0 12px;border:1px solid var(--line, #444);border-radius:10px;cursor:pointer}
+.native-toggle-row input{width:17px;height:17px;margin:2px 0 0;accent-color:var(--accent, #8b5cf6);flex:0 0 auto}
+.native-toggle-row span{display:flex;flex-direction:column;gap:3px}
+.native-toggle-row small{font-size:12px;opacity:.75;line-height:1.4}
 </style>
 </head>
 <body>
@@ -286,9 +301,11 @@ dialog::backdrop { background: rgba(10,10,14,.7); }
         <div class="title" id="editing-label">editing</div>
 
         <div class="custom-bar">
+            <label for="language-select">Language</label>
+            <select id="language-select" aria-label="Programming language"><option value="python">Python 3 (visualizer)</option><option value="c">C (GCC 15)</option><option value="cpp">C++ (G++ 15)</option></select>
             <button id="btn-new" class="ghost small" title="Start a new custom algorithm in the highlighted lane">New custom</button>
-            <button id="btn-import" class="ghost small" title="Import one or more .py files as custom algorithms">Import .py</button>
-            <button id="btn-download" class="ghost small" title="Download the code in the editor as a .py file">Download .py</button>
+            <button id="btn-import" class="ghost small" title="Import one or more Python files as custom algorithms">Import .py</button>
+            <button id="btn-download" class="ghost small" title="Download the code in the editor in the selected language">Download code</button>
             <button id="btn-export" class="ghost small" title="Download every custom algorithm in one .py file">Export all customs</button>
             <input type="file" id="file-import" accept=".py,text/x-python,text/plain" multiple class="hidden">
         </div>
@@ -298,13 +315,26 @@ dialog::backdrop { background: rgba(10,10,14,.7); }
         </div>
         <div id="preset-meta"></div>
 
-        <label class="title" for="code">python code</label>
+        <div class="code-label-row"><label class="title" for="code" id="code-label">python code</label><div class="code-tools"><button type="button" id="load-native-example" class="ghost small hidden">Load Selected Example</button><button type="button" id="show-pseudocode" class="ghost small">Show Pseudocode</button></div></div>
         <div class="editor-shell" id="editor-shell">
             <pre id="code-highlight" aria-hidden="true"></pre>
             <textarea id="code" spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="Python code editor" wrap="off"></textarea>
-            <div class="editor-footer"><span>PYTHON 3</span><span id="line-count">1 line</span><span>CTRL / CMD + ENTER TO RUN</span></div>
+            <div class="editor-footer"><span id="language-badge">PYTHON 3</span><span id="line-count">1 line</span><span>CTRL / CMD + ENTER TO RUN</span></div>
         </div>
         <div id="error" class="hidden"><pre id="error-text"></pre></div>
+        <div id="native-output-wrap" class="hidden">
+            <label class="native-toggle-row" for="use-local-interpreter">
+                <input type="checkbox" id="use-local-interpreter">
+                <span><strong>Use local interpreter</strong><small>Runs supported C/C++ code in this browser. Off by default; your choice is saved in this browser.</small></span>
+            </label>
+            <label class="title" for="onlinecompiler-key">OnlineCompiler.io widget key</label>
+            <div class="name-row" style="margin-bottom:8px">
+                <input type="password" id="onlinecompiler-key" autocomplete="off" spellcheck="false" placeholder="Paste your WebSocket / widget key">
+                <button type="button" id="toggle-key" class="ghost small" title="Show or hide key">Show</button>
+                <button type="button" id="save-key" class="ghost small" title="Save key in this browser">Save key</button>
+            </div>
+            <p class="muted" style="margin:0 0 8px">Use a WebSocket key from the Widgets page, not a REST API key. The key is stored only in this browser when you click Save key.</p>
+            <label class="title" for="native-stdin">standard input (stdin)</label><textarea id="native-stdin" rows="3" spellcheck="false" placeholder="Optional input passed to stdin"></textarea><div class="title">compiler output</div><pre id="native-output" class="native-output" aria-live="polite"></pre><p class="muted">Built-in C/C++ sorting examples capture an instrumented trace for animation. Other C/C++ programs show their output unless they emit the visualizer's trace format. The local interpreter only captures comparisons and writes involving the program's first declared array.</p></div>
 
         <details class="help">
             <summary>how to write your own algorithm !!</summary>
@@ -662,6 +692,7 @@ self.onmessage = async (e) => {
 };
 </script>
 
+<script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
 <script>
 'use strict';
 
@@ -670,17 +701,7 @@ const PRESETS = [
 {
     id: 'template', group: 'Playground', name: 'Blank template (write your own)',
     desc: 'A starter to edit. Just sort the list in place; the visualizer watches every compare, swap and write for you.',
-    code: `# Write a normal Python function that sorts the list in place.
-# The visualizer watches the list for you, so no special commands are needed:
-#   comparing two items (a < b, a > b, ...)  shows red
-#   swapping  arr[i], arr[j] = arr[j], arr[i]   shows orange
-#   writing   arr[i] = value                    shows purple
-#   a bar that reaches its final spot           turns green
-#
-# Name the function anything. The last public function that takes
-# exactly one argument (the list) is the one that runs.
-
-def my_sort(arr):
+    code: `def my_sort(arr):
     n = len(arr)
     for i in range(n):
         for j in range(i + 1, n):
@@ -1466,8 +1487,37 @@ function highlightPython(src) {
     out += escapeHTML(src.slice(last));
     return out + (src.endsWith('\n') ? ' ' : '\n');
 }
+const C_KEYWORDS = new Set('alignas alignof asm auto bool break case catch char class const constexpr continue default delete do double else enum explicit export extern false float for friend goto if inline int long mutable namespace new noexcept nullptr operator private protected public register reinterpret_cast return short signed sizeof static static_assert struct switch template this thread_local throw true try typedef typename union unsigned using virtual void volatile wchar_t while'.split(' '));
+const C_TYPES = new Set('size_t ptrdiff_t int8_t int16_t int32_t int64_t uint8_t uint16_t uint32_t uint64_t string vector array map unordered_map set pair optional nullptr_t'.split(' '));
+const C_TOKEN = /\/\*[\s\S]*?\*\/|\/\/[^\n]*|\#[^\n]*|L?u8?(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')|(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')|\b(?:0[xX][\da-fA-F]+|0[bB][01]+|\d+(?:\.\d*)?(?:[eE][+-]?\d+)?[uUlLfF]*)\b|\b[A-Za-z_]\w*\b|(?:->\*|->|::|\+\+|--|<<=?|>>=?|&&|\|\||==|!=|<=|>=|\+=|-=|\*=|\/=|%=|&=|\|=|\^=|\.\*|[-+*/%=<>!&|^~?:;,.[\]{}()])/g;
+function highlightNative(src) {
+    let out = '', last = 0, m;
+    C_TOKEN.lastIndex = 0;
+    while ((m = C_TOKEN.exec(src))) {
+        out += escapeHTML(src.slice(last, m.index));
+        const t = m[0], c = t[0];
+        let cls = '';
+        if (t.startsWith('//') || t.startsWith('/*')) cls = 'py-comment';
+        else if (c === '#') cls = 'py-preprocessor';
+        else if (c === '"' || c === "'") cls = 'py-string';
+        else if (/[0-9]/.test(c)) cls = 'py-number';
+        else if (C_KEYWORDS.has(t)) cls = 'py-keyword';
+        else if (C_TYPES.has(t)) cls = 'py-type';
+        else if (/^[A-Za-z_]/.test(t)) {
+            const rest = src.slice(C_TOKEN.lastIndex);
+            if (/^\s*\(/.test(rest)) cls = 'py-function';
+            else if (/^(?:NULL|EOF|stdin|stdout|stderr|EXIT_SUCCESS|EXIT_FAILURE)$/.test(t)) cls = 'py-constant';
+        } else cls = 'py-operator';
+        out += cls ? '<span class="' + cls + '">' + escapeHTML(t) + '</span>' : escapeHTML(t);
+        last = C_TOKEN.lastIndex;
+    }
+    out += escapeHTML(src.slice(last));
+    return out + (src.endsWith('\n') ? ' ' : '\n');
+}
 function syncCodeHighlight() {
-    highlightEl.innerHTML = highlightPython(el.code.value);
+    const lang = document.getElementById('language-select')?.value || 'python';
+    const source = el.code.value;
+    highlightEl.innerHTML = lang === 'python' ? highlightPython(source) : highlightNative(source);
     highlightEl.scrollTop = el.code.scrollTop;
     highlightEl.scrollLeft = el.code.scrollLeft;
     const n = Math.max(1, el.code.value.split('\n').length);
@@ -1577,7 +1627,7 @@ function newLaneState(wrap, canvas) {
         wrap, canvas, ctx: canvas.getContext('2d'), cssW: 300, cssH: 200, dirty: true,
         algo: null, card: null, sel: null, msgEl: null, stat: null, game: false, onFinish: null,
         initial: S.initial, max: S.maxVal, values: Int32Array.from(S.initial), trans: new Uint8Array(n), done: new Uint8Array(n),
-        events: null, total: 0, pos: 0, final: null, pyMs: null, err: null,
+        events: null, total: 0, pos: 0, final: null, pyMs: null, err: null, nativeTrace: false,
         finished: false, sweeping: false, sweep: 0, rank: 0, okState: false,
         cps: [], cpStep: 2048, counts: { cmp: 0, swap: 0, set: 0 }, touch: 0
     };
@@ -1586,7 +1636,7 @@ function newLaneState(wrap, canvas) {
     return l;
 }
 function resetLane(l, dropEvents) {
-    if (dropEvents) { l.events = null; l.total = 0; l.final = null; l.pyMs = null; l.cps = []; l.err = null; }
+    if (dropEvents) { l.events = null; l.total = 0; l.final = null; l.pyMs = null; l.cps = []; l.err = null; l.nativeTrace = false; }
     const n = l.initial.length;
     l.pos = 0; l.finished = false; l.sweeping = false; l.rank = 0; l.okState = false;
     l.counts = { cmp: 0, swap: 0, set: 0 };
@@ -1775,8 +1825,10 @@ function setState(s) {
 }
 function refreshUI() {
     const s = S.state, hasEv = lanes.some((l) => l.events), lock = s === 'computing' || s === 'confirm';
-    el.play.textContent = { idle: 'Run', computing: 'Cancel', confirm: 'Run', playing: 'Pause', paused: 'Resume', finished: 'Replay' }[s];
-    el.play.disabled = (!engineReady && s === 'idle') || s === 'confirm';
+    const nativeMode = (document.getElementById('language-select')?.value || 'python') !== 'python';
+    const nativeTraceReady = !!(S.active && S.active.nativeTrace && S.active.events);
+    el.play.textContent = nativeMode && !nativeTraceReady ? (nativeBusy ? 'Compiling…' : 'Compile & run') : { idle: 'Run', computing: 'Cancel', confirm: 'Run', playing: 'Pause', paused: 'Resume', finished: 'Replay' }[s];
+    el.play.disabled = (!nativeMode && !engineReady && s === 'idle') || s === 'confirm' || (nativeMode && nativeBusy);
     el.prev.disabled = !hasEv || lock;
     el.next.disabled = lock || (!engineReady && !hasEv);
     el.finish.disabled = !hasEv || lock;
@@ -1892,7 +1944,7 @@ function startWorker() {
         const m = e.data;
         if (m.type === 'ready') {
             engineReady = true;
-            setEngine('ready', 'Python ready');
+            setEngine('ready', document.getElementById('language-select')?.value === 'python' ? 'Python ready' : 'Local C/C++ interpreter');
             refreshUI(); lanes.forEach(refreshLaneMsg);
         } else if (m.type === 'fatal') {
             setEngine('error', 'Python failed to load: ' + m.message + ' (are you online?)');
@@ -1982,6 +2034,11 @@ async function startRun() {
     startPlay();
 }
 el.play.addEventListener('click', async () => {
+    if (document.getElementById('language-select')?.value !== 'python') {
+        if (!S.active?.nativeTrace || !S.active?.events) { await compileAndRunNative(); return; }
+        switch (S.state) { case 'playing': pauseAll(); break; case 'finished': rewindAll(); startPlay(); break; default: startPlay(); break; }
+        return;
+    }
     switch (S.state) {
         case 'idle': await startRun(); break;
         case 'computing': cancelCompute(); break;
@@ -1993,12 +2050,12 @@ el.play.addEventListener('click', async () => {
 el.next.addEventListener('click', async () => {
     if (S.state === 'playing') pauseAll();
     if (S.state === 'computing' || S.state === 'confirm') return;
-    if (!(await computeMissing())) return;
+    if (selectedLanguage() === 'python' && !(await computeMissing())) return;
     if (S.g >= maxTotal() && lanes.every((l) => !l.events || l.finished)) return;
     S.g++;
     let first = null;
     for (const l of lanes) {
-        if (!l.events || l.finished) continue;
+        if (!l.events || l.finished || (selectedLanguage() !== 'python' && !l.nativeTrace)) continue;
         if (l.pos < l.total) { l.trans.fill(0); applyEvent(l, l.pos, true); l.pos++; l.dirty = true; if (!first) first = l; }
         if (l.pos >= l.total) finishLane(l);
     }
@@ -2092,6 +2149,10 @@ function updateLaneChrome() {
 function onLaneAlgoChange(l) {
     l.algo = l.sel.value;
     resetLane(l, true);
+    if (typeof selectedLanguage === 'function' && selectedLanguage() !== 'python') {
+        if (S.active !== l) setActive(l);
+        if (typeof loadSelectedNativeExample === 'function') loadSelectedNativeExample();
+    }
     if (S.state === 'computing') cancelCompute();
     if (S.state === 'confirm') hideNotice();
     rewindAll();
@@ -2130,6 +2191,14 @@ function setActive(l) {
 function loadEditor() {
     const l = S.active;
     if (!l) return;
+    if (showingPseudocode) hidePseudocodeView();
+    if (document.getElementById('language-select')?.value !== 'python') {
+        const id = l.algo && l.algo.startsWith('p:') ? l.algo.slice(2) : 'template';
+        el.code.value = loadNativeCode(selectedLanguage(), id);
+        syncCodeHighlight();
+        setNativeRunState(true);
+        return;
+    }
     const a = resolveAlgo(l.algo);
     el.code.value = a.code;
     syncCodeHighlight();
@@ -2195,6 +2264,7 @@ function renderMeta() {
 }
 function lanesUsing(algo) { return lanes.filter((l) => l.algo === algo); }
 function onCodeEdit() {
+    if (document.getElementById('language-select')?.value !== 'python') { syncCodeHighlight(); return; }
     syncCodeHighlight();
     const l = S.active;
     let a = resolveAlgo(l.algo);
@@ -2216,7 +2286,15 @@ function onCodeEdit() {
     rewindAll();
     setState('idle');
 }
-el.code.addEventListener('input', onCodeEdit);
+el.code.addEventListener('input', () => {
+    if (showingPseudocode) return;
+    if (selectedLanguage() !== 'python' && S.active) {
+        const id = S.active.algo && S.active.algo.startsWith('p:') ? S.active.algo.slice(2) : 'template';
+        saveNativeCode(selectedLanguage(), id, el.code.value);
+        resetLane(S.active, true); setState('idle'); syncCodeHighlight(); return;
+    }
+    onCodeEdit();
+});
 el.code.addEventListener('keydown', (e) => {
     const c = el.code;
     if (e.key === 'Tab') {
@@ -2293,8 +2371,11 @@ el.btnDelete.addEventListener('click', () => {
     loadEditor();
 });
 el.btnDownload.addEventListener('click', () => {
-    const a = resolveAlgo(S.active.algo);
-    download(slug(a.name) + '.py', el.code.value.endsWith('\n') ? el.code.value : el.code.value + '\n');
+    const lang = selectedLanguage();
+    const ext = lang === 'c' ? '.c' : lang === 'cpp' ? '.cpp' : '.py';
+    const a = S.active ? resolveAlgo(S.active.algo) : null;
+    download((lang === 'python' ? slug(a?.name || 'algorithm') : 'sorting_program') + ext,
+        el.code.value.endsWith('\n') ? el.code.value : el.code.value + '\n');
 });
 el.btnExport.addEventListener('click', () => {
     if (!customs.length) return;
@@ -2402,7 +2483,8 @@ function openGame() {
 }
 async function gameRound() {
     const my = ++G.token;
-    cancelAnimationFrame(G.raf);
+    if (G.raf) cancelAnimationFrame(G.raf);
+    G.raf = 0;
     G.answered = false;
     el.gChoices.textContent = '';
     el.gResult.textContent = '';
@@ -2453,6 +2535,7 @@ function gameFrame(t) {
     }
     if (l.sweeping) sweepStep(l);
     if (l.dirty) { l.dirty = false; draw(l); updateGameStats(); }
+    G.raf = 0;
     if (!l.finished || l.sweeping) G.raf = requestAnimationFrame(gameFrame);
 }
 function gameFinished(l) {
@@ -2468,9 +2551,7 @@ function gameFinished(l) {
         b.addEventListener('click', () => answer(id));
         el.gChoices.appendChild(b);
     });
-    kickGame();
 }
-function kickGame() { G.raf = requestAnimationFrame(gameFrame); }
 function answer(id) {
     if (G.answered) return;
     G.answered = true;
@@ -2491,13 +2572,949 @@ function answer(id) {
 el.gOpen.addEventListener('click', openGame);
 el.gNext.addEventListener('click', gameRound);
 el.gClose.addEventListener('click', () => el.dlg.close());
-el.dlg.addEventListener('close', () => { G.token++; cancelAnimationFrame(G.raf); });
+el.dlg.addEventListener('close', () => { G.token++; if (G.raf) cancelAnimationFrame(G.raf); G.raf = 0; });
+
+
+// ====================================================================
+//  Language modes (Python visualization + OnlineCompiler.io C/C++ runner)
+// ====================================================================
+const languageSelect = document.getElementById('language-select');
+const nativeOutputWrap = document.getElementById('native-output-wrap');
+const loadNativeExampleButton = document.getElementById('load-native-example');
+const nativeOutput = document.getElementById('native-output');
+const nativeStdin = document.getElementById('native-stdin');
+const onlineCompilerKey = document.getElementById('onlinecompiler-key');
+const toggleKeyButton = document.getElementById('toggle-key');
+const saveKeyButton = document.getElementById('save-key');
+const useLocalInterpreterToggle = document.getElementById('use-local-interpreter');
+const LOCAL_INTERPRETER_STORAGE = 'sorty_use_local_interpreter_v1';
+try { useLocalInterpreterToggle.checked = localStorage.getItem(LOCAL_INTERPRETER_STORAGE) === 'true'; } catch { useLocalInterpreterToggle.checked = false; }
+useLocalInterpreterToggle.addEventListener('change', () => {
+    try { localStorage.setItem(LOCAL_INTERPRETER_STORAGE, useLocalInterpreterToggle.checked ? 'true' : 'false'); } catch {}
+    nativeOutput.textContent = useLocalInterpreterToggle.checked
+        ? 'Local interpreter enabled. Supported C/C++ code will run in this browser.'
+        : 'Local interpreter disabled. Runs will use OnlineCompiler.io.';
+    if (selectedLanguage() !== 'python') {
+        document.getElementById('engine').textContent = useLocalInterpreterToggle.checked
+            ? 'Local C/C++ interpreter'
+            : 'OnlineCompiler.io · online compiler';
+    }
+});
+const ONLINE_COMPILER_KEY_STORAGE = 'sorty_onlinecompiler_widget_key_v1';
+try { onlineCompilerKey.value = localStorage.getItem(ONLINE_COMPILER_KEY_STORAGE) || ''; } catch {}
+toggleKeyButton.addEventListener('click', () => {
+    const showing = onlineCompilerKey.type === 'text';
+    onlineCompilerKey.type = showing ? 'password' : 'text';
+    toggleKeyButton.textContent = showing ? 'Show' : 'Hide';
+});
+saveKeyButton.addEventListener('click', () => {
+    const key = onlineCompilerKey.value.trim();
+    try {
+        if (key) localStorage.setItem(ONLINE_COMPILER_KEY_STORAGE, key);
+        else localStorage.removeItem(ONLINE_COMPILER_KEY_STORAGE);
+        nativeOutput.textContent = key ? 'Widget key saved in this browser.' : 'Saved widget key cleared.';
+    } catch (err) {
+        nativeOutput.textContent = 'Could not save the key in this browser: ' + (err.message || err);
+    }
+});
+const codeLabel = document.getElementById('code-label');
+const languageBadge = document.getElementById('language-badge');
+const pyCodeSnapshot = { value: '', algo: null };
+
+const PSEUDOCODE = {
+    template: `Repeat comparisons and moves
+UNTIL the array is sorted`,
+    bubble: `Compare adjacent elements
+
+IF left element > right element:
+    Swap elements ↔
+
+Repeat until no swaps are needed`,
+    bubble_opt: `Set the active end to the last position →
+Compare adjacent elements up to the active end
+
+IF left element > right element:
+    Swap elements ↔
+    Remember this position →
+
+Move the active end to the last swap →
+Repeat until no swaps are needed`,
+    cocktail: `Compare adjacent elements from left to right
+Move the largest element to the right boundary →
+Compare adjacent elements from right to left
+Move the smallest element to the left boundary ←
+Shrink both boundaries →
+Repeat until neither pass makes a swap`,
+    oddeven: `Compare pairs at alternating positions
+
+IF left element > right element:
+    Swap elements ↔
+
+Switch to the other set of pairs
+Repeat until a full cycle makes no swaps`,
+    gnome: `Compare the current element with its left neighbor
+
+IF left element <= current element:
+    Move forward →
+ELSE:
+    Swap elements ↔
+    Step back ←
+
+Repeat until the end is reached`,
+    selection: `Select the first unsorted position →
+Find the smallest element in the unsorted section
+Swap it into the selected position ↔
+Repeat for each unsorted position`,
+    insertion: `Select next element →
+Compare with elements to its left
+
+WHILE left element > selected element:
+    Shift left element →
+
+Insert selected element into the gap left behind`,
+    binsertion: `Select next element →
+Split the sorted section in half to find where it fits
+Repeat until the insertion point is found
+Shift larger elements →
+Insert selected element into the gap`,
+    shell: `Start with a gap about half the array length →
+Compare elements separated by the gap
+
+IF left element > right element:
+    Shift the larger element →
+
+Reduce the gap →
+Repeat until the gap reaches 1
+Finish with adjacent comparisons until sorted`,
+    comb: `Start with a gap equal to the array length →
+Shrink the gap by about 1.3×
+Compare elements separated by the gap
+
+IF left element > right element:
+    Swap elements ↔
+
+Repeat until the gap is 1 and no swaps remain`,
+    merge: `Split the array into halves →
+Repeat until each part has 1 element
+
+Compare first elements of each half
+Take smaller element → sorted array
+Copy remaining elements → sorted array
+
+Repeat until all elements are merged`,
+    merge_bu: `Start with sorted sections of 1 element
+Compare first elements of neighboring sections
+Take smaller element → merged section
+Copy remaining elements → merged section
+Double the section size →
+Repeat until the full array is one sorted section`,
+    quick_lomuto: `Choose a pivot →
+Compare each element with the pivot
+
+IF element < pivot:
+    Move element before the pivot →
+
+Place the pivot between both sections →
+Repeat on each section until sorted`,
+    quick_hoare: `Choose the middle element as pivot →
+Start one pointer at each end →
+Move left pointer until its element >= pivot
+Move right pointer until its element <= pivot
+
+IF the pointers have not crossed:
+    Swap elements ↔
+    Move both pointers inward →
+
+Repeat on both sections until sorted`,
+    heap: `Build a max-heap with the largest element at the root
+Swap the root with the last unsorted element ↔
+Move the sorted boundary left ←
+Move the new root down to restore the heap →
+Repeat until every element is in place`,
+    tim: `Split the array into runs of up to 16 elements →
+Sort each run using insertion sort
+Merge neighboring sorted runs →
+Double the run size →
+Repeat until one sorted run remains`,
+    counting: `Find the smallest and largest values
+Count how often each value appears
+Write values back in ascending order → array`,
+    radix: `Start with the least significant digit →
+Group elements by the current digit
+Collect groups in digit order → array
+Move to the next digit →
+Repeat until the largest digit is processed`,
+    bucket: `Find the value range →
+Distribute elements into range buckets
+Sort each bucket
+Concatenate buckets in order → array`,
+    cycle: `Select the next unsorted position →
+Count values smaller than the selected element
+Move the selected element to its final rank →
+Move each displaced element to its final rank
+Repeat until every cycle is complete`,
+    pancake: `Find the largest element in the unsorted prefix →
+Flip the prefix to bring it to the front ↔
+Flip the prefix again to place it at the end ↔
+Shrink the unsorted prefix ←
+Repeat until sorted`,
+    stooge: `Compare the first and last elements
+
+IF first element > last element:
+    Swap elements ↔
+
+IF the section has at least 3 elements:
+    Sort the first two-thirds
+    Sort the last two-thirds
+    Sort the first two-thirds again
+
+Repeat until each section has at most 2 elements`,
+    slow: `Split the section into two halves →
+Sort each half recursively
+Compare the middle and last elements
+
+IF middle element > last element:
+    Swap elements ↔
+
+Sort the section without its last element
+Repeat until each section has 1 element`,
+    bogo: `Check whether the array is sorted
+
+IF the array is not sorted:
+    Shuffle elements ↔
+
+Repeat until sorted`,
+    builtin: `Pass the array to the built-in sort →
+Runtime sorts the values in ascending order`,
+    wick: `Check the array size and values →
+
+IF the array is small:
+    Use insertion sort
+ELSE:
+    Group values by each digit
+    Collect groups in digit order → array
+
+Repeat until the array is sorted`,
+    'wick-o': `Find the smallest and largest values
+
+IF the value range is small:
+    Count each value
+    Write values back in ascending order → array
+ELSE:
+    Group values by digit blocks
+    Collect groups in order → array
+
+Repeat until all digit blocks are processed`,
+    solo: `Compare adjacent elements
+
+IF left element > right element:
+    Swap elements ↔
+
+Repeat passes until the array is sorted`
+};
+PRESETS.forEach(p => { p.pseudocode = PSEUDOCODE[p.id] || PSEUDOCODE.template; });
+
+function formatNativeSource(source) {
+    // Lightweight C/C++ formatter for generated examples: split statements
+    // and braces onto readable lines while respecting strings, comments,
+    // parentheses (so for-loop semicolons stay on one line), and preprocessor lines.
+    let out = '', indent = 0, parens = 0, quote = '', lineStart = true;
+    let inLineComment = false, inBlockComment = false, escape = false;
+    const pad = () => '    '.repeat(Math.max(0, indent));
+    const trimLine = () => { out = out.replace(/[ \t]+$/,''); };
+    const newline = () => {
+        trimLine();
+        if (out && !out.endsWith('\n')) out += '\n';
+        lineStart = true;
+    };
+    const emit = ch => {
+        if (lineStart && ch !== '\n') { out += pad(); lineStart = false; }
+        out += ch;
+    };
+    for (let i = 0; i < source.length; i++) {
+        const ch = source[i], next = source[i + 1];
+        if (inLineComment) {
+            emit(ch);
+            if (ch === '\n') { inLineComment = false; lineStart = true; }
+            continue;
+        }
+        if (inBlockComment) {
+            emit(ch);
+            if (ch === '*' && next === '/') { emit('/'); i++; inBlockComment = false; }
+            continue;
+        }
+        if (lineStart && ch === '#') {
+            while (i < source.length && source[i] !== '\n') {
+                emit(source[i]);
+                i++;
+            }
+            newline();
+            continue;
+        }
+        if (quote) {
+            emit(ch);
+            if (escape) escape = false;
+            else if (ch === '\\') escape = true;
+            else if (ch === quote) quote = '';
+            continue;
+        }
+        if (ch === '/' && next === '/') { emit('/'); emit('/'); i++; inLineComment = true; continue; }
+        if (ch === '/' && next === '*') { emit('/'); emit('*'); i++; inBlockComment = true; continue; }
+        if (ch === '"' || ch === "'") { quote = ch; emit(ch); continue; }
+        if (ch === '(') { parens++; emit(ch); continue; }
+        if (ch === ')') {
+            parens = Math.max(0, parens - 1); emit(ch);
+            if (parens === 0) {
+                const currentLine = out.slice(out.lastIndexOf('\n') + 1);
+                if (/\b(for|if|while|switch)\s*\(/.test(currentLine)) {
+                    if (/^\s*\{/.test(source.slice(i + 1))) emit(' ');
+                    else newline();
+                }
+            }
+            continue;
+        }
+        if (ch === '{') {
+            if (!lineStart && !out.endsWith(' ') && !out.endsWith('\n')) emit(' ');
+            emit('{'); indent++; newline(); continue;
+        }
+        if (ch === '}') {
+            newline(); indent = Math.max(0, indent - 1); emit('}');
+            if (next !== ';' && next !== ',' && next !== ')' && next !== ']' && next !== ' ' && next !== '\n') newline();
+            continue;
+        }
+        if (ch === ';' && parens === 0) { emit(';'); newline(); continue; }
+        if (ch === '\n') { newline(); continue; }
+        if (ch === '\r') continue;
+        if (/\s/.test(ch)) {
+            if (!lineStart && !out.endsWith(' ') && !out.endsWith('\n')) emit(' ');
+            continue;
+        }
+        emit(ch);
+    }
+    trimLine();
+    return out.trim() + '\n';
+}
+
+function matchingNativeBrace(source, openIndex) {
+    let depth = 0, quote = '', escape = false;
+    for (let i = openIndex; i < source.length; i++) {
+        const ch = source[i];
+        if (quote) {
+            if (escape) escape = false;
+            else if (ch === '\\') escape = true;
+            else if (ch === quote) quote = '';
+            continue;
+        }
+        if (ch === '"' || ch === "'") { quote = ch; continue; }
+        if (ch === '{') depth++;
+        else if (ch === '}' && --depth === 0) return i;
+    }
+    return -1;
+}
+
+function nativeSourceForAlgorithm(source, algoId) {
+    const fnStart = source.indexOf('static void sort_array(');
+    if (fnStart < 0) return source;
+    const fnOpen = source.indexOf('{', fnStart);
+    const fnClose = matchingNativeBrace(source, fnOpen);
+    if (fnOpen < 0 || fnClose < 0) return source;
+    const branches = source.slice(fnOpen + 1, fnClose).split(/\r?\n/).map(line => line.trim())
+        .filter(line => /^(?:if|else if)\s*\(/.test(line) || /^else\s*\{/.test(line));
+    const branch = branches.find(line => {
+        const ids = Array.from(line.matchAll(/!strcmp\(id,"([^"]+)"\)/g), match => match[1]);
+        return ids.includes(algoId) || (!ids.length && /^else\s*\{/.test(line));
+    });
+    if (!branch) return source;
+    const branchOpen = branch.indexOf('{');
+    const branchClose = matchingNativeBrace(branch, branchOpen);
+    if (branchOpen < 0 || branchClose < 0) return source;
+    const selectedBody = branch.slice(branchOpen + 1, branchClose);
+    const helperStart = source.indexOf('static void insertion(');
+    if (helperStart < 0 || helperStart > fnStart) return source;
+    const helperLines = source.slice(helperStart, fnStart).split(/\r?\n/)
+        .map(line => line.trim()).filter(Boolean);
+    const helperNames = new Set(helperLines.map(line => line.match(/^static\s+\w+\s+(\w+)\s*\(/)?.[1]).filter(Boolean));
+    const requiredHelpers = new Set(Array.from(helperNames).filter(name => new RegExp('\\b' + name + '\\s*\\(').test(selectedBody)));
+    let expanded = true;
+    while (expanded) {
+        expanded = false;
+        for (const line of helperLines) {
+            const name = line.match(/^static\s+\w+\s+(\w+)\s*\(/)?.[1];
+            if (!name || !requiredHelpers.has(name)) continue;
+            for (const dependency of helperNames) {
+                if (!requiredHelpers.has(dependency) && new RegExp('\\b' + dependency + '\\s*\\(').test(line)) {
+                    requiredHelpers.add(dependency);
+                    expanded = true;
+                }
+            }
+        }
+    }
+    const selectedHelpers = helperLines.filter(line => {
+        const name = line.match(/^static\s+\w+\s+(\w+)\s*\(/)?.[1];
+        return name && requiredHelpers.has(name);
+    }).join('\n');
+    const selectedFunction = 'static void sort_array(int*a,int n,const char*id){\n' +
+        selectedBody + '\n }';
+    return source.slice(0, helperStart) + selectedHelpers + '\n' + selectedFunction + source.slice(fnClose + 1);
+}
+
+function nativeExampleSource(lang, algoId) {
+    const id = String(algoId || 'bubble');
+    const bodies = {
+      bubble: `for(int i=0;i<n-1;i++){for(int j=0;j<n-i-1;j++){if(a[j]>a[j+1]){int t=a[j];a[j]=a[j+1];a[j+1]=t;}}}`,
+      bubble_opt: `for(int end=n-1;end>0;){int last=0;for(int j=0;j<end;j++){if(a[j]>a[j+1]){int t=a[j];a[j]=a[j+1];a[j+1]=t;last=j;}}end=last;}`,
+      cocktail: `int lo=0,hi=n-1,changed=1;while(changed&&lo<hi){changed=0;for(int i=lo;i<hi;i++){if(a[i]>a[i+1]){int t=a[i];a[i]=a[i+1];a[i+1]=t;changed=1;}}hi--;for(int i=hi;i>lo;i--){if(a[i-1]>a[i]){int t=a[i-1];a[i-1]=a[i];a[i]=t;changed=1;}}lo++;}`,
+      selection: `for(int i=0;i<n-1;i++){int m=i;for(int j=i+1;j<n;j++){if(a[j]<a[m])m=j;}if(m!=i){int t=a[i];a[i]=a[m];a[m]=t;}}`,
+      insertion: `for(int i=1;i<n;i++){int x=a[i],j=i;while(j>0&&a[j-1]>x){a[j]=a[j-1];j--;}a[j]=x;}`,
+      gnome: `int i=1;while(i<n){if(i==0||a[i-1]<=a[i])i++;else{int t=a[i];a[i]=a[i-1];a[i-1]=t;i--;}}`,
+      comb: `int gap=n,sw=1;while(gap>1||sw){gap=gap*10/13;if(gap<1)gap=1;sw=0;for(int i=0;i+gap<n;i++){if(a[i]>a[i+gap]){int t=a[i];a[i]=a[i+gap];a[i+gap]=t;sw=1;}}}`,
+      shell: `for(int gap=n/2;gap>0;gap/=2){for(int i=gap;i<n;i++){int x=a[i],j=i;while(j>=gap&&a[j-gap]>x){a[j]=a[j-gap];j-=gap;}a[j]=x;}}`
+    };
+    const body = bodies[id];
+    if (!body) {
+        const source = NATIVE_SORT_TEMPLATE.replace('__ALGO__', id);
+        return formatNativeSource(nativeSourceForAlgorithm(source, id));
+    }
+     return formatNativeSource(`#include <stdio.h>
+int main(){int n=0;if(scanf("%d",&n)!=1||n<0||n>20000){printf("Input size must be between 0 and 20000\\n");return 1;}int a[n];for(int i=0;i<n;i++)scanf("%d",&a[i]);${body}for(int i=0;i<n;i++)printf("%d%s",a[i],i+1==n?"\\n":" ");return 0;}`);
+}
+const NATIVE_SORT_TEMPLATE = `#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#define _TRACE_MAX 50000
+static int _tr[_TRACE_MAX * 3];
+static unsigned _tn = 0;
+static unsigned long long _trace_offset = 0;
+static unsigned long long _trace_seen = 0;
+static void _trace(int t, int x, int y) {
+    unsigned long long event_index = _trace_seen++;
+    if (event_index < _trace_offset || _tn >= _TRACE_MAX) return;
+    unsigned k = _tn * 3;
+    _tr[k] = t; _tr[k + 1] = x; _tr[k + 2] = y;
+    _tn++;
+}
+static void _flush_trace(void) {
+    int complete = _trace_offset + _tn >= _trace_seen;
+    const char *dir = getenv("OUTPUT_DIR");
+    if (dir && dir[0]) {
+        char path[768];
+        snprintf(path, sizeof(path), "%s/sv.txt", dir);
+        FILE *f = fopen(path, "w");
+        if (f) {
+            for (unsigned i = 0; i < _tn; i++) fprintf(f, "%d,%d,%d\\n", _tr[i * 3], _tr[i * 3 + 1], _tr[i * 3 + 2]);
+            fputs(complete ? "END\\n" : "@SV:PARTIAL\\n", f);
+            fclose(f);
+        }
+    }
+    unsigned used = 0;
+    fputs("@SV ", stdout);
+    for (unsigned i = 0; i < _tn; i++) {
+        char buf[80];
+        int len = snprintf(buf, sizeof(buf), "%d,%d,%d ", _tr[i * 3], _tr[i * 3 + 1], _tr[i * 3 + 2]);
+        if (len < 0 || used + (unsigned)len > 24000u) {
+            complete = 0;
+            break;
+        }
+        fputs(buf, stdout);
+        used += (unsigned)len;
+    }
+    fputs(complete ? "\\n@SV:END\\n" : "\\n@SV:PARTIAL\\n", stdout);
+}
+#define TRACE_CMP(i,j) _trace(0,(i),(j))
+#define TRACE_SWAP(i,j) do { _trace(1,(i),(j)); int _t=a[i]; a[i]=a[j]; a[j]=_t; } while(0)
+#define TRACE_SET(i,v) do { int _i=(i); int _v=(v); _trace(2,_i,_v); a[_i]=_v; } while(0)
+#define LESS(i,j) (TRACE_CMP(i,j), a[i] < a[j])
+#define GREATER(i,j) (TRACE_CMP(i,j), a[i] > a[j])
+static void insertion(int*a,int n,int lo,int hi){for(int i=lo+1;i<hi;i++){int x=a[i],j=i;while(j>lo){TRACE_CMP(j-1,j);if(a[j-1]<=x)break;TRACE_SET(j,a[j-1]);j--;}TRACE_SET(j,x);}}
+static void merge_range(int*a,int lo,int mid,int hi){int n=hi-lo,*t=(int*)malloc((size_t)n*sizeof(int));if(!t)return;int i=lo,j=mid,k=0;while(i<mid&&j<hi){TRACE_CMP(i,j);t[k++]=a[i]<=a[j]?a[i++]:a[j++];}while(i<mid)t[k++]=a[i++];while(j<hi)t[k++]=a[j++];for(i=0;i<n;i++)TRACE_SET(lo+i,t[i]);free(t);}
+static void sift(int*a,int root,int end){for(;;){int c=root*2+1;if(c>end)return;if(c+1<=end){TRACE_CMP(c,c+1);if(a[c]<a[c+1])c++;}TRACE_CMP(root,c);if(a[root]<a[c]){TRACE_SWAP(root,c);root=c;}else return;}}
+static void quick_l(int*a,int lo,int hi){if(lo>=hi)return;int pivot=a[hi],i=lo;for(int j=lo;j<hi;j++){TRACE_CMP(j,hi);if(a[j]<pivot){TRACE_SWAP(i,j);i++;}}TRACE_SWAP(i,hi);quick_l(a,lo,i-1);quick_l(a,i+1,hi);}
+static void quick_h(int*a,int lo,int hi){if(lo>=hi)return;int pivot=a[(lo+hi)/2],i=lo,j=hi;while(i<=j){while(i<=hi){TRACE_CMP(i,(lo+hi)/2);if(a[i]>=pivot)break;i++;}while(j>=lo){TRACE_CMP(j,(lo+hi)/2);if(a[j]<=pivot)break;j--;}if(i<=j){TRACE_SWAP(i,j);i++;j--;}}if(lo<j)quick_h(a,lo,j);if(i<hi)quick_h(a,i,hi);}
+static void stooge(int*a,int l,int h){if(l>=h)return;TRACE_CMP(l,h);if(a[l]>a[h])TRACE_SWAP(l,h);if(h-l+1>2){int t=(h-l+1)/3;stooge(a,l,h-t);stooge(a,l+t,h);stooge(a,l,h-t);}}
+static void slow_sort(int*a,int i,int j){if(i>=j)return;int m=(i+j)/2;slow_sort(a,i,m);slow_sort(a,m+1,j);TRACE_CMP(m,j);if(a[m]>a[j])TRACE_SWAP(m,j);slow_sort(a,i,j-1);}
+static int cmp_int_qsort(const void*x,const void*y){int u=*(const int*)x,v=*(const int*)y;return (u>v)-(u<v);}
+static int sorted(int*a,int n){for(int i=1;i<n;i++){TRACE_CMP(i-1,i);if(a[i-1]>a[i])return 0;}return 1;}
+static void sort_array(int*a,int n,const char*id){
+ if(!strcmp(id,"bubble")||!strcmp(id,"bubble_opt")||!strcmp(id,"solo")){int end=n-1;while(end>0){int last=0;for(int j=0;j<end;j++){TRACE_CMP(j,j+1);if(a[j]>a[j+1]){TRACE_SWAP(j,j+1);last=j;}}if(!strcmp(id,"bubble"))end--;else end=last;}}
+ else if(!strcmp(id,"cocktail")){int lo=0,hi=n-1,sw=1;while(sw&&lo<hi){sw=0;for(int i=lo;i<hi;i++){TRACE_CMP(i,i+1);if(a[i]>a[i+1]){TRACE_SWAP(i,i+1);sw=1;}}hi--;for(int i=hi;i>lo;i--){TRACE_CMP(i-1,i);if(a[i-1]>a[i]){TRACE_SWAP(i-1,i);sw=1;}}lo++;}}
+ else if(!strcmp(id,"oddeven")){int done=0;while(!done){done=1;for(int start=1;start>=0;start--){for(int i=start;i<n-1;i+=2){TRACE_CMP(i,i+1);if(a[i]>a[i+1]){TRACE_SWAP(i,i+1);done=0;}}}}}
+ else if(!strcmp(id,"gnome")){int i=1;while(i<n){if(i==0){i++;continue;}TRACE_CMP(i-1,i);if(a[i-1]<=a[i])i++;else{TRACE_SWAP(i-1,i);i--;}}}
+ else if(!strcmp(id,"selection")){for(int i=0;i<n-1;i++){int m=i;for(int j=i+1;j<n;j++){TRACE_CMP(j,m);if(a[j]<a[m])m=j;}if(m!=i)TRACE_SWAP(i,m);}}
+ else if(!strcmp(id,"insertion")){insertion(a,n,0,n);}
+ else if(!strcmp(id,"binsertion")){for(int i=1;i<n;i++){int x=a[i],l=0,r=i;while(l<r){int m=(l+r)/2;TRACE_CMP(m,i);if(a[m]<=x)l=m+1;else r=m;}for(int j=i;j>l;j--)TRACE_SET(j,a[j-1]);TRACE_SET(l,x);}}
+ else if(!strcmp(id,"shell")){for(int gap=n/2;gap>0;gap/=2)for(int i=gap;i<n;i++){int x=a[i],j=i;while(j>=gap){TRACE_CMP(j-gap,i);if(a[j-gap]<=x)break;TRACE_SET(j,a[j-gap]);j-=gap;}TRACE_SET(j,x);}}
+ else if(!strcmp(id,"comb")){int gap=n,sw=1;while(gap>1||sw){gap=(gap*10)/13;if(gap<1)gap=1;sw=0;for(int i=0;i+gap<n;i++){TRACE_CMP(i,i+gap);if(a[i]>a[i+gap]){TRACE_SWAP(i,i+gap);sw=1;}}}}
+ else if(!strcmp(id,"merge")||!strcmp(id,"merge_bu")||!strcmp(id,"tim")){int run=!strcmp(id,"tim")?16:1;if(!strcmp(id,"tim")){for(int i=0;i<n;i+=run)insertion(a,n,i,(i+run<n?i+run:n));}for(;run<n;run*=2)for(int lo=0;lo<n;lo+=2*run){int mid=lo+run,hi=lo+2*run;if(mid<n){if(hi>n)hi=n;merge_range(a,lo,mid,hi);}}}
+ else if(!strcmp(id,"quick_lomuto")){quick_l(a,0,n-1);}
+ else if(!strcmp(id,"quick_hoare")){quick_h(a,0,n-1);}
+ else if(!strcmp(id,"heap")){for(int i=n/2-1;i>=0;i--)sift(a,i,n-1);for(int e=n-1;e>0;e--){TRACE_SWAP(0,e);sift(a,0,e-1);}}
+ else if(!strcmp(id,"counting")){if(n){int mn=a[0],mx=a[0];for(int i=1;i<n;i++){if(a[i]<mn)mn=a[i];if(a[i]>mx)mx=a[i];}long range=(long)mx-mn+1;if(range>2L*n||range>200000){insertion(a,n,0,n);}else{int*c=(int*)calloc((size_t)range,sizeof(int));for(int i=0;i<n;i++)c[a[i]-mn]++;int k=0;for(long v=0;v<range;v++){int reps=c[v];for(int q=0;q<reps;q++)TRACE_SET(k++,(int)(v+mn));}free(c);}}}
+ else if(!strcmp(id,"radix")){int neg=0;for(int i=0;i<n;i++)if(a[i]<0)neg=1;if(neg){insertion(a,n,0,n);}else{int mx=0;for(int i=0;i<n;i++)if(a[i]>mx)mx=a[i];for(long exp=1;mx/exp>0;exp*=10){int out[n ? n : 1],cnt[10]={0};for(int i=0;i<n;i++)cnt[(a[i]/exp)%10]++;for(int d=1;d<10;d++)cnt[d]+=cnt[d-1];for(int i=n-1;i>=0;i--){int d=(a[i]/exp)%10;out[--cnt[d]]=a[i];}for(int i=0;i<n;i++)TRACE_SET(i,out[i]);if(exp>1000000000L)break;}}}
+ else if(!strcmp(id,"bucket")){if(n>1){int mn=a[0],mx=a[0];for(int i=1;i<n;i++){if(a[i]<mn)mn=a[i];if(a[i]>mx)mx=a[i];}int k=(int)(n>64?64:n);if(mx==mn){}else{int **b=(int**)calloc((size_t)k,sizeof(int*));int *sz=(int*)calloc((size_t)k,sizeof(int));int *cap=(int*)calloc((size_t)k,sizeof(int));for(int i=0;i<n;i++){int q=(int)(((long long)(a[i]-mn)*k)/((long long)mx-mn+1));if(q>=k)q=k-1;if(sz[q]==cap[q]){cap[q]=cap[q]?cap[q]*2:4;b[q]=(int*)realloc(b[q],(size_t)cap[q]*sizeof(int));}b[q][sz[q]++]=a[i];}int pos=0;for(int q=0;q<k;q++){for(int i=1;i<sz[q];i++){int x=b[q][i],j=i;while(j>0&&b[q][j-1]>x){b[q][j]=b[q][j-1];j--;}b[q][j]=x;}for(int i=0;i<sz[q];i++)TRACE_SET(pos++,b[q][i]);free(b[q]);}free(b);free(sz);free(cap);}}}
+ else if(!strcmp(id,"cycle")){for(int start=0;start<n-1;start++){int item=a[start],pos=start;for(int i=start+1;i<n;i++){TRACE_CMP(i,start);if(a[i]<item)pos++;}if(pos==start)continue;while(pos<n&&item==a[pos])pos++;if(pos>=n)continue;int t=a[pos];TRACE_SET(pos,item);item=t;while(pos!=start){pos=start;for(int i=start+1;i<n;i++){TRACE_CMP(i,start);if(a[i]<item)pos++;}while(pos<n&&item==a[pos])pos++;if(pos>=n)break;t=a[pos];TRACE_SET(pos,item);item=t;}}}
+ else if(!strcmp(id,"pancake")){for(int size=n;size>1;size--){int m=0;for(int i=1;i<size;i++){TRACE_CMP(i,m);if(a[i]>a[m])m=i;}for(int k=m,j=0;k>j;k--,j++)TRACE_SWAP(j,k);for(int k=size-1,j=0;k>j;k--,j++)TRACE_SWAP(j,k);}}
+ else if(!strcmp(id,"stooge")){if(n<=40)stooge(a,0,n-1);else insertion(a,n,0,n);}
+ else if(!strcmp(id,"slow")){if(n<=20)slow_sort(a,0,n-1);else insertion(a,n,0,n);}
+ else if(!strcmp(id,"bogo")){if(n<=8){int tries=0;while(!sorted(a,n)&&tries++<200000){for(int i=n-1;i>0;i--){int j=rand()%(i+1);TRACE_SWAP(i,j);}}}else insertion(a,n,0,n);}
+ else if(!strcmp(id,"wick")){int neg=0,mx=0;for(int i=0;i<n;i++){if(a[i]<0)neg=1;if(a[i]>mx)mx=a[i];}if(neg)quick_h(a,0,n-1);else for(long exp=1;mx/exp>0;exp*=10){int out[n ? n : 1],cnt[10]={0};for(int i=0;i<n;i++)cnt[(a[i]/exp)%10]++;for(int d=1;d<10;d++)cnt[d]+=cnt[d-1];for(int i=n-1;i>=0;i--){int d=(a[i]/exp)%10;out[--cnt[d]]=a[i];}for(int i=0;i<n;i++)TRACE_SET(i,out[i]);if(exp>1000000000L)break;}}
+ else if(!strcmp(id,"wick-o")){if(n>0){int mn=a[0],mx=a[0];for(int i=1;i<n;i++){if(a[i]<mn)mn=a[i];if(a[i]>mx)mx=a[i];}long range=(long)mx-mn+1;if(range<=2L*n&&range<=200000){int*c=(int*)calloc((size_t)range,sizeof(int));for(int i=0;i<n;i++)c[a[i]-mn]++;int k=0;for(long v=0;v<range;v++){int reps=c[v];for(int q=0;q<reps;q++)TRACE_SET(k++,(int)(v+mn));}free(c);}else{int neg=0;for(int i=0;i<n;i++)if(a[i]<0)neg=1;if(neg)quick_h(a,0,n-1);else{int out[n ? n : 1];for(int shift=0;shift<32;shift+=8){int cnt[256]={0};for(int i=0;i<n;i++)cnt[(a[i]>>shift)&255]++;for(int d=1;d<256;d++)cnt[d]+=cnt[d-1];for(int i=n-1;i>=0;i--){int d=(a[i]>>shift)&255;out[--cnt[d]]=a[i];}for(int i=0;i<n;i++)TRACE_SET(i,out[i]);}}}}}
+ else {insertion(a,n,0,n);}
+}
+ int main(){int n;if(scanf("%d",&n)!=1||n<0||n>20000){fprintf(stderr,"Input size must be between 0 and 20000 (compiler service stdout has a strict limit).\\n");return 2;}int*a=(int*)malloc((size_t)(n?n:1)*sizeof(int));if(!a)return 3;for(int i=0;i<n;i++)if(scanf("%d",&a[i])!=1){free(a);return 4;}scanf("%llu",&_trace_offset);srand(1);sort_array(a,n,"__ALGO__");_flush_trace();if(n<=128){for(int i=0;i<n;i++)printf("%d%s",a[i],i+1==n?"\\n":" ");}free(a);return 0;}
+`;
+const nativeDefaults = {
+    c: '#include <stdio.h>\n\nint main(void) {\n    int values[] = {5, 2, 8, 1, 3};\n    int n = (int)(sizeof(values) / sizeof(values[0]));\n    for (int i = 0; i < n; ++i) {\n        printf("%d%s", values[i], i + 1 == n ? "\\n" : " ");\n    }\n    return 0;\n}\n',
+    cpp: '#include <algorithm>\n#include <iostream>\n#include <vector>\n\nint main() {\n    std::vector<int> values{5, 2, 8, 1, 3};\n    std::sort(values.begin(), values.end());\n    for (std::size_t i = 0; i < values.size(); ++i) {\n        std::cout << values[i] << (i + 1 == values.size() ? "\\n" : " ");\n    }\n    return 0;\n}\n'
+};
+let nativeBusy = false;
+const NATIVE_TRACE_BATCH_EVENTS = 50000;
+const NATIVE_TRACE_MAX_EVENTS = 4000000;
+const NATIVE_LOCAL_EXAMPLE_IDS = new Set(['bubble', 'bubble_opt', 'cocktail', 'selection', 'insertion', 'gnome', 'comb', 'shell']);
+function selectedLanguage() { return languageSelect.value; }
+function nativeStorageKey(lang, algoId) {
+    return 'sorty_native_code_' + lang + '_' + String(algoId || 'bubble') + '_v2';
+}
+function isLegacyGeneratedNativeBundle(source, algoId) {
+    const ids = new Set(Array.from(String(source).matchAll(/!strcmp\(id,"([^"]+)"\)/g), match => match[1]));
+    return ids.size >= 25 &&
+        String(source).includes('#define _TRACE_MAX 50000') &&
+        String(source).includes('static void sort_array(') &&
+        new RegExp('sort_array\\s*\\(\\s*a\\s*,\\s*n\\s*,\\s*"' + String(algoId).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '"\\s*\\)').test(source);
+}
+function loadNativeCode(lang, algoId) {
+    const key = nativeStorageKey(lang, algoId);
+    const saved = localStorage.getItem(key);
+    if (saved != null) {
+        // Always rebuild generated examples so trace protocol fixes ship even
+        // when an older template is still sitting in localStorage.
+        if (saved.includes('/* LOCAL_C_INTERPRETER_EXAMPLE:') ||
+            saved.includes('/* WICKKI_SORT_EXAMPLE */') ||
+            isLegacyGeneratedNativeBundle(saved, algoId)) {
+            return nativeExampleSource(lang, algoId);
+        }
+        return saved;
+    }
+    // Do not reuse the old language-wide draft: it caused every algorithm to
+    // reopen with the same source. Each algorithm now owns its own draft.
+    return nativeExampleSource(lang, algoId);
+}
+function saveNativeCode(lang, algoId, source) {
+    localStorage.setItem(nativeStorageKey(lang, algoId), source);
+}
+function setNativeRunState(isNative) {
+    nativeOutputWrap.classList.toggle('hidden', !isNative);
+    el.lanes.classList.toggle('native-single', isNative);
+    loadNativeExampleButton.classList.toggle('hidden', !isNative);
+    document.getElementById('btn-import').classList.toggle('hidden', isNative);
+    document.getElementById('btn-export').classList.toggle('hidden', isNative);
+    document.getElementById('btn-new').classList.toggle('hidden', isNative);
+    if (isNative) document.getElementById('name-row').classList.add('hidden');
+    document.getElementById('preset-meta').classList.toggle('hidden', isNative);
+    codeLabel.textContent = isNative ? (selectedLanguage() === 'c' ? 'C code · ' : 'C++ code · ') + (resolveAlgo(S.active?.algo || 'p:bubble').name || 'sorting example') : 'python code';
+    if (showingPseudocode) el.code.readOnly = true;
+    languageBadge.textContent = isNative ? (selectedLanguage() === 'c' ? 'C · GCC 15' : 'C++ · G++ 15') : 'PYTHON 3';
+    document.getElementById('code').setAttribute('aria-label', isNative ? (selectedLanguage() === 'c' ? 'C code editor' : 'C++ code editor') : 'Python code editor');
+    document.getElementById('btn-download').textContent = isNative ? 'Download .' + (selectedLanguage() === 'c' ? 'c' : 'cpp') : 'Download .py';
+    document.getElementById('btn-download').title = 'Download code in the selected language';
+    document.getElementById('play').textContent = isNative ? (nativeBusy ? 'Compiling…' : 'Compile & run') : 'Run';
+    document.getElementById('engine').textContent = isNative ? (useLocalInterpreterToggle.checked ? 'Local C/C++ interpreter' : 'OnlineCompiler.io · online compiler') : (engineReady ? 'Python ready' : 'Loading Python (Pyodide)…');
+    document.getElementById('engine').classList.toggle('native-engine', isNative);
+    const traceReady = !!(isNative && S.active && S.active.nativeTrace && S.active.events);
+    document.getElementById('prev').disabled = isNative && !traceReady || !S.active?.events;
+    document.getElementById('next').disabled = isNative && !traceReady || !S.active?.events;
+    document.getElementById('finish').disabled = isNative && !traceReady || !S.active?.events;
+    document.getElementById('scrub').disabled = isNative && !traceReady;
+    document.getElementById('add-lane').disabled = isNative;
+    refreshUI();
+}
+function switchLanguage() {
+    hidePseudocodeView();
+    const lang = selectedLanguage();
+    if (lang === 'python') {
+        setNativeRunState(false);
+        if (pyCodeSnapshot.value && S.active) {
+            el.code.value = pyCodeSnapshot.value;
+            syncCodeHighlight();
+        } else loadEditor();
+        nativeOutputWrap.classList.add('hidden');
+        refreshUI();
+        return;
+    }
+    if (S.active) pyCodeSnapshot.value = el.code.value;
+    lanes.forEach(l => resetLane(l, true));
+    S.g = 0; setState('idle');
+    const activeAlgo = S.active && S.active.algo && S.active.algo.startsWith('p:') ? S.active.algo.slice(2) : 'bubble';
+    el.code.value = loadNativeCode(lang, activeAlgo);
+    syncCodeHighlight();
+    clearError();
+    nativeOutput.textContent = 'Ready. Click “Compile & run” to build and execute this program.';
+    setNativeRunState(true);
+}
+languageSelect.addEventListener('change', switchLanguage);
+function loadSelectedNativeExample() {
+    if (selectedLanguage() === 'python') return;
+    hidePseudocodeView();
+    const id = activePresetId();
+    el.code.value = nativeExampleSource(selectedLanguage(), id);
+    saveNativeCode(selectedLanguage(), id, el.code.value);
+    syncCodeHighlight();
+    if (S.active) resetLane(S.active, true);
+    setState('idle');
+    nativeOutput.textContent = 'Loaded the ' + (PRESETS.find(p => p.id === id)?.name || id) + ' example. Compile & run to visualize it.';
+    setNativeRunState(true);
+}
+loadNativeExampleButton.addEventListener('click', loadSelectedNativeExample);
+function nativeFileName() { return 'sorting_program.' + (selectedLanguage() === 'c' ? 'c' : 'cpp'); }
+function decodeBase64Text(b64) {
+    try {
+        const bin = atob(String(b64).replace(/\s/g, ''));
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        return new TextDecoder('utf-8').decode(bytes);
+    } catch {
+        return '';
+    }
+}
+function nativeTraceFileText(result) {
+    const files = [].concat(result && result.files ? result.files : [], result && result.output_files ? result.output_files : []);
+    for (const f of files) {
+        if (!f) continue;
+        const name = String(f.name || f.filename || f.path || '').split(/[/\\]/).pop();
+        if (name !== 'sv.txt') continue;
+        if (typeof f.content === 'string' && /^-?\d+,-?\d+,-?\d+/m.test(f.content)) return f.content;
+        if (f.content_base64) {
+            const text = decodeBase64Text(f.content_base64);
+            if (text) return text;
+        }
+    }
+    return '';
+}
+function parseNativeTrace(text) {
+    const events = [];
+    const cleanLines = [];
+    let traceEnd = false;
+    let tracePartial = false;
+    const pushTriplet = (parts) => {
+        if (parts.length !== 3 || events.length >= 150000) return;
+        const nums = parts.map(Number);
+        if (nums.every(Number.isFinite)) events.push(nums[0], nums[1], nums[2]);
+    };
+    const eatPacked = (s) => {
+        for (const rec of String(s).trim().split(/[\s;]+/)) {
+            if (!rec) continue;
+            pushTriplet(rec.split(','));
+        }
+    };
+    for (const line of String(text || '').split(/\r?\n/)) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        if (trimmed === 'END' || trimmed === '@SV:END') { traceEnd = true; continue; }
+        if (trimmed === '@SV:PARTIAL') { tracePartial = true; continue; }
+        if (trimmed === '@SV' || trimmed.startsWith('@SV')) {
+            const body = trimmed.startsWith('@SV:') ? trimmed.slice(4).trim() : trimmed.slice(3).trim();
+            if (body === 'END') { traceEnd = true; continue; }
+            eatPacked(body);
+            continue;
+        }
+        if (/^-?\d+,-?\d+,-?\d+$/.test(trimmed)) { pushTriplet(trimmed.split(',')); continue; }
+        cleanLines.push(line);
+    }
+    return { events, traceEnd, tracePartial, cleanLines };
+}
+function parseNativeCompilerResult(result) {
+    const fileTrace = nativeTraceFileText(result);
+    const parsedFile = fileTrace
+        ? parseNativeTrace(fileTrace)
+        : { events: [], traceEnd: false, tracePartial: false, cleanLines: [] };
+    const parsedOut = parseNativeTrace(String(result.output || ''));
+    const useFile = parsedFile.events.length >= parsedOut.events.length;
+    return {
+        events: useFile ? parsedFile.events : parsedOut.events,
+        traceEnd: useFile ? parsedFile.traceEnd : parsedOut.traceEnd,
+        tracePartial: useFile ? parsedFile.tracePartial : parsedOut.tracePartial,
+        cleanLines: parsedOut.cleanLines,
+        fromFile: useFile && parsedFile.events.length > 0,
+        hasTraceFile: !!fileTrace
+    };
+}
+function runNativeCompiler(compilerId, code, input, widgetKey, onConnect) {
+    let socket;
+    return new Promise((resolve, reject) => {
+        let settled = false;
+        const finish = (fn, value) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            if (socket) socket.disconnect();
+            fn(value);
+        };
+        const timer = setTimeout(() => finish(reject, new Error('The compiler did not respond within 60 seconds. Please retry.')), 60000);
+        socket = window.io('https://api.onlinecompiler.io', {
+            auth: { token: widgetKey },
+            transports: ['websocket'],
+            reconnection: false,
+            timeout: 15000
+        });
+        socket.on('connect', () => {
+            if (onConnect) onConnect();
+            socket.emit('runcode', { compiler: compilerId, code, input });
+        });
+        socket.on('codeoutput', data => finish(resolve, data));
+        socket.on('connect_error', err => finish(reject, new Error(
+            'Could not connect or authenticate. Confirm this is a WebSocket/widget key (not a REST API key), that it is active, and that its allowed-domain setting permits this page. Details: ' +
+            (err && err.message ? err.message : String(err))
+        )));
+        socket.on('error', err => finish(reject, new Error(
+            typeof err === 'string' ? err : (err && err.message) || 'OnlineCompiler.io reported a connection error.'
+        )));
+        socket.on('disconnect', reason => {
+            if (!settled && reason !== 'io client disconnect') {
+                finish(reject, new Error('The connection closed before a result arrived: ' + reason));
+            }
+        });
+    });
+}
+async function compileAndRunNative() {
+    if (nativeBusy) return;
+    const lang = selectedLanguage();
+    if (lang === 'python') return;
+    const source = el.code.value;
+    const runLane = S.active;
+    const runAlgo = runLane?.algo || null;
+    const initialRef = S.initial;
+    const initialValues = Array.from(initialRef);
+    const runMax = S.maxVal;
+    const activeId = activePresetId();
+    const activeAlgo = runLane ? resolveAlgo(runLane.algo) : null;
+    const isPresetLane = activeAlgo?.kind === 'preset';
+    const isBuiltInExample = isPresetLane && source === nativeExampleSource(lang, activeId);
+    const canRunLocally = !isPresetLane || activeId === 'template' || NATIVE_LOCAL_EXAMPLE_IDS.has(activeId);
+    const onlineSource = isBuiltInExample
+        ? NATIVE_SORT_TEMPLATE.replace('__ALGO__', activeId)
+        : source;
+    const widgetKey = onlineCompilerKey.value.trim();
+    const currentSelection = () =>
+        selectedLanguage() === lang &&
+        S.active === runLane &&
+        (!runLane || runLane.algo === runAlgo) &&
+        S.initial === initialRef &&
+        el.code.value === source;
+    const storageAlgoId = runAlgo && runAlgo.startsWith('p:') ? runAlgo.slice(2) : 'template';
+    if (isBuiltInExample && S.initial.length > 20000) {
+        nativeOutput.textContent = 'The built-in sorting examples are limited to 20000 items. Reduce Array size and try again.';
+        return;
+    }
+
+    if (!source.trim()) {
+        nativeOutput.textContent = 'Nothing to compile. Enter a C/C++ program first.';
+        return;
+    }
+    // Run supported C/C++ directly in the browser. No source is uploaded.
+    if (useLocalInterpreterToggle.checked && window.LocalCInterpreter && canRunLocally) {
+        try {
+            saveNativeCode(lang, storageAlgoId, source);
+            nativeOutput.textContent = 'Running locally in the C/C++ interpreter…';
+            const localInput = nativeStdin.value.trim() || (isBuiltInExample
+                ? (initialValues.length + '\n' + initialValues.join(' ') + '\n')
+                : '');
+            const localResult = window.LocalCInterpreter.run(source, { stdin: localInput, maxSteps: 1500000, maxOutput: 200000 });
+            const l = runLane;
+            if (l && localResult.events.length && initialValues.length) {
+                l.initial = initialRef; l.max = runMax;
+                l.events = Int32Array.from(localResult.events.flat()); l.total = l.events.length / 3;
+                l.final = initialValues.slice();
+                for (let i = 0; i < l.total; i++) {
+                    const k = i * 3, t = l.events[k], a = l.events[k + 1], b = l.events[k + 2];
+                    if (t === 1 && a >= 0 && b >= 0 && a < l.final.length && b < l.final.length) { const v=l.final[a]; l.final[a]=l.final[b]; l.final[b]=v; }
+                    else if (t === 2 && a >= 0 && a < l.final.length) l.final[a]=b;
+                }
+                buildCps(l); resetLane(l, false); l.nativeTrace = true; l.pos = 0; S.g = 0; S.confirmedBig = true;
+                updateLaneStats(l); setNativeRunState(true); setState('paused'); startPlay();
+            }
+            nativeOutput.textContent = (localResult.output || 'Program completed with no output.') + '\n\nLOCAL C/C++ INTERPRETER · ' + localResult.steps.toLocaleString() + ' execution steps' + (localResult.events.length ? '\nVISUAL TRACE · ' + localResult.events.length + ' events' : '\nNO VISUAL TRACE · The local interpreter only captures comparisons and writes involving the program\'s first declared array.');
+            return;
+        } catch (localError) {
+            nativeOutput.textContent = 'Local interpreter: ' + (localError.message || String(localError)) + '\n\nThis program uses a C/C++ feature that is not implemented yet. The local interpreter does not send your code anywhere. Online compiler fallback remains available below.';
+            if (!onlineCompilerKey.value.trim()) return;
+            // If a key is configured, allow the existing online compiler as an explicit compatibility fallback.
+        }
+    }
+    if (source.length > 100000) {
+        nativeOutput.textContent = 'Source is too large (100 KB maximum).';
+        return;
+    }
+    if (nativeStdin.value.length > 100000) {
+        nativeOutput.textContent = 'Standard input is too large (100 KB maximum).';
+        return;
+    }
+    if (!widgetKey) {
+        nativeOutput.textContent = 'Enter your OnlineCompiler.io WebSocket / widget key above. Create this key from the Widgets page in your OnlineCompiler.io dashboard; a REST API key will not work here.';
+        onlineCompilerKey.focus();
+        return;
+    }
+    if (typeof window.io !== 'function') {
+        nativeOutput.textContent = 'The Socket.IO client did not load. Check your internet connection, disable script-blocking extensions for this page, and reload.';
+        return;
+    }
+
+    saveNativeCode(lang, storageAlgoId, source);
+    nativeBusy = true;
+    setNativeRunState(true);
+    nativeOutput.textContent = 'Connecting to OnlineCompiler.io…\nYour source code and standard input will be sent to its online compiler.';
+
+    let lastResult = null;
+    let lastParsed = { events: [], traceEnd: false, tracePartial: false, cleanLines: [], fromFile: false, hasTraceFile: false };
+    let compilerRuns = 0;
+    let totalTraceEvents = 0;
+    let traceComplete = false;
+    let stoppedForSelectionChange = false;
+    let traceFailure = '';
+    const eventChunks = [];
+    try {
+        const compilerId = lang === 'c' ? 'gcc-15' : 'g++-15';
+        while (true) {
+            if (!currentSelection()) {
+                stoppedForSelectionChange = true;
+                break;
+            }
+            const offset = isBuiltInExample ? totalTraceEvents : 0;
+            const input = isBuiltInExample
+                ? initialValues.length + '\n' + initialValues.join(' ') + '\n' + offset + '\n'
+                : nativeStdin.value;
+            nativeOutput.textContent = isBuiltInExample
+                ? 'Capturing C/C++ trace · ' + totalTraceEvents.toLocaleString() + ' events so far · compiler run ' + (compilerRuns + 1) + '…'
+                : 'Compiling and running with ' + (lang === 'c' ? 'GCC 15' : 'G++ 15') + '…';
+            try {
+                lastResult = await runNativeCompiler(compilerId, onlineSource, input, widgetKey);
+            } catch (compilerError) {
+                traceFailure = 'Compiler run ' + (compilerRuns + 1) + ' failed: ' + (compilerError.message || String(compilerError));
+                break;
+            }
+            compilerRuns++;
+            lastParsed = parseNativeCompilerResult(lastResult);
+            if (!currentSelection()) {
+                stoppedForSelectionChange = true;
+                break;
+            }
+            if (lastParsed.events.length) {
+                const room = NATIVE_TRACE_MAX_EVENTS - totalTraceEvents;
+                const accepted = Math.min(lastParsed.events.length / 3, room);
+                if (accepted > 0) {
+                    eventChunks.push(Int32Array.from(lastParsed.events.slice(0, accepted * 3)));
+                    totalTraceEvents += accepted;
+                }
+            }
+            const runFailed = (lastResult.status && String(lastResult.status).toLowerCase() !== 'success') ||
+                (lastResult.exit_code !== undefined && lastResult.exit_code !== null && Number(lastResult.exit_code) !== 0);
+            if (runFailed) break;
+            if (lastParsed.traceEnd) {
+                traceComplete = true;
+                break;
+            }
+            if (!isBuiltInExample) break;
+            if (totalTraceEvents >= NATIVE_TRACE_MAX_EVENTS) break;
+            const runEvents = lastParsed.events.length / 3;
+            if (runEvents !== NATIVE_TRACE_BATCH_EVENTS) {
+                traceFailure = lastParsed.hasTraceFile
+                    ? 'The compiler returned an incomplete trace chunk, so continuation stopped to avoid duplicating or skipping animation steps.'
+                    : 'The compiler did not return the sv.txt trace file. Its stdout limit only exposed ' + runEvents.toLocaleString() + ' events, so the next 50,000-event chunk could not be requested safely.';
+                break;
+            }
+        }
+
+        if (stoppedForSelectionChange) {
+            nativeOutput.textContent = 'Trace capture stopped because the language, selected algorithm, array, or editor code changed while the compiler was running. Run the current selection to compile it.';
+            return;
+        }
+
+        if (eventChunks.length && currentSelection()) {
+            const l = runLane;
+            const events = new Int32Array(totalTraceEvents * 3);
+            let eventAt = 0;
+            for (const chunk of eventChunks) {
+                events.set(chunk, eventAt);
+                eventAt += chunk.length;
+            }
+            eventChunks.length = 0;
+            l.initial = initialRef; l.max = runMax;
+            l.events = events; l.total = totalTraceEvents;
+            l.final = initialValues.slice();
+            for (let i = 0; i < l.total; i++) {
+                const k = i * 3, t = l.events[k], a = l.events[k + 1], b = l.events[k + 2];
+                if (t === 1 && a >= 0 && b >= 0 && a < l.final.length && b < l.final.length) { const v=l.final[a]; l.final[a]=l.final[b]; l.final[b]=v; }
+                else if (t === 2 && a >= 0 && a < l.final.length) l.final[a]=b;
+            }
+            buildCps(l); resetLane(l, false); l.nativeTrace = true; l.pos = 0; S.g = 0; S.confirmedBig = true;
+            updateLaneStats(l); setNativeRunState(true);
+        }
+
+        const sections = [];
+        if (lastResult?.error && String(lastResult.error).trim()) {
+            sections.push((lastResult.status === 'success' && Number(lastResult.exit_code) === 0
+                ? 'COMPILER / STDERR' : 'COMPILER ERROR / STDERR') + '\n' + String(lastResult.error).trimEnd());
+        }
+        if (lastParsed.cleanLines.length) sections.push('PROGRAM OUTPUT\n' + lastParsed.cleanLines.join('\n'));
+        if (totalTraceEvents) {
+            sections.push('VISUAL TRACE: ' + totalTraceEvents.toLocaleString() + ' animation steps captured' +
+                (lastParsed.fromFile ? ' (from output file)' : '') +
+                (traceComplete ? '.' : ' (partial trace).'));
+        }
+        if (compilerRuns > 1) {
+            sections.push('TRACE PAGING: ' + compilerRuns + ' compiler runs of up to 50,000 events. Each run replayed the built-in sort from the same starting array and skipped the events already captured, preserving the original algorithm order.');
+        }
+        if (traceFailure) sections.push('NOTICE: ' + traceFailure);
+        if (isBuiltInExample && totalTraceEvents >= NATIVE_TRACE_MAX_EVENTS && !traceComplete) {
+            sections.push('NOTICE: The 4,000,000-event animation limit was reached before the trace completed.');
+        }
+        if (lastResult?.status) sections.push('STATUS: ' + lastResult.status);
+        if (lastResult?.exit_code !== undefined && lastResult.exit_code !== null) sections.push('EXIT CODE: ' + lastResult.exit_code);
+        if (lastResult?.signal) sections.push('SIGNAL: ' + lastResult.signal);
+        if (lastResult?.time) sections.push('LAST RUN TIME: ' + lastResult.time + ' s');
+        if (lastResult?.total) sections.push('LAST TOTAL TIME: ' + lastResult.total + ' s');
+        if (lastResult?.memory) sections.push('MEMORY: ' + lastResult.memory + ' KB');
+        if (lastResult?.truncated && !lastParsed.events.length) sections.push('NOTICE: Output was truncated by the compiler service.');
+        if (lastResult?.error && !lastResult.output && !lastResult.status) sections.unshift('SERVICE ERROR\n' + String(lastResult.error));
+        if (!sections.length) sections.push('Build and run completed with no output.');
+        nativeOutput.textContent = sections.join('\n\n');
+        if (totalTraceEvents && currentSelection()) { setState('paused'); startPlay(); }
+    } catch (err) {
+        nativeOutput.textContent = 'Could not compile/run: ' + (err.message || String(err)) +
+            '\n\nPython mode still runs locally in your browser. C/C++ mode requires an internet connection and an active OnlineCompiler.io WebSocket/widget key.';
+    } finally {
+        nativeBusy = false;
+        setNativeRunState(selectedLanguage() !== 'python');
+    }
+}
+
+
+// Pseudocode view is read-only presentation: toggling it never edits the underlying algorithm.
+const pseudocodeButton = document.getElementById('show-pseudocode');
+let showingPseudocode = false;
+let pseudocodeSource = '';
+function activePresetId() { const a = S.active && S.active.algo || 'p:bubble'; return a.startsWith('p:') ? a.slice(2) : 'template'; }
+function showPseudocodeView() {
+    const id = activePresetId();
+    if (selectedLanguage() === 'python') { const a = resolveAlgo(S.active.algo); pseudocodeSource = a.code; }
+    else pseudocodeSource = el.code.value;
+    const preset = resolveAlgo(S.active.algo);
+    const p = preset.p?.pseudocode || PSEUDOCODE[id] || PSEUDOCODE.template;
+    el.code.value = p; showingPseudocode = true; pseudocodeButton.textContent = 'Show Code';
+    el.code.readOnly = true; syncCodeHighlight();
+}
+function hidePseudocodeView() {
+    if (!showingPseudocode) return;
+    el.code.readOnly = false; el.code.value = pseudocodeSource; showingPseudocode = false;
+    pseudocodeButton.textContent = 'Show Pseudocode'; syncCodeHighlight();
+}
+pseudocodeButton.addEventListener('click', () => { if (showingPseudocode) hidePseudocodeView(); else showPseudocodeView(); });
 
 // ====================================================================
 //  Init
 // ====================================================================
 loadCustoms();
 loadSettings();
+languageSelect.value = 'python';
 el.size.value = S.n;
 buildPalette();
 updateSpeedLabel();
@@ -2510,6 +3527,34 @@ S.maxVal = maxOf(S.initial);
 }
 refreshUI();
 startWorker();
+</script>
+<script>
+/* Local C/C++ subset interpreter. Deliberately no eval/Function/native code. */
+(function(){
+'use strict';
+class CError extends Error{constructor(m,t){super(m+(t?' (line '+t.line+', column '+t.col+')':''));this.name='CInterpreterError';}}
+const TYPES=new Set(['int','long','short','unsigned','signed','float','double','char','bool','void','size_t','auto','const','static','volatile','register','extern']);
+function lex(src){const out=[];let i=0,line=1,col=1;const push=(v,k)=>out.push({v,k,line,col});while(i<src.length){let c=src[i];if(/\s/.test(c)){if(c==='\n'){line++;col=1}else col++;i++;continue;}if(src.startsWith('//',i)){while(i<src.length&&src[i]!=='\n'){i++;col++;}continue;}if(src.startsWith('/*',i)){i+=2;col+=2;while(i<src.length&&!src.startsWith('*/',i)){if(src[i]==='\n'){line++;col=1}else col++;i++;}if(i>=src.length)throw new CError('Unclosed comment');i+=2;col+=2;continue;}if(c==='#'){while(i<src.length&&src[i]!=='\n'){i++;col++;}continue;}const l=line,kc=col;if(c==='"'||c==="'"){let q=c,v='';i++;col++;while(i<src.length&&src[i]!==q){if(src[i]==='\\'){i++;col++;const e=src[i];v+=({n:'\n',t:'\t',r:'\r','0':'\0'}[e]??e);i++;col++;}else{v+=src[i];if(src[i]==='\n'){line++;col=1}else col++;i++;}}if(src[i]!==q)throw new CError('Unclosed string',{line:l,col:kc});i++;col++;push(v,q==='"'?'str':'char');continue;}let m=src.slice(i).match(/^(?:0[xX][\da-fA-F]+|\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)/);if(m){push(Number(m[0]),'num');i+=m[0].length;col+=m[0].length;continue;}m=src.slice(i).match(/^[A-Za-z_]\w*/);if(m){push(m[0],'id');i+=m[0].length;col+=m[0].length;continue;}m=src.slice(i).match(/^(?:>>=|<<=|\+\+|--|==|!=|<=|>=|&&|\|\||<<|>>|\+=|-=|\*=|\/=|%=|->|::)/);if(m){push(m[0],'op');i+=m[0].length;col+=m[0].length;continue;}if('+-*/%<>=!&|^~?:;,.[\]{}()'.includes(c)){push(c,'op');i++;col++;continue;}throw new CError('Unexpected character '+c,{line,col});}out.push({v:'<eof>',k:'eof',line,col});return out;}
+class Parser{constructor(src){this.t=lex(src);this.i=0;}p(){return this.t[this.i]}take(v){if(this.p().v===v){return this.t[this.i++]}return null}need(v){let t=this.take(v);if(!t)throw new CError('Expected '+v,this.p());return t}id(){let t=this.p();if(t.k!=='id')throw new CError('Expected identifier',t);this.i++;return t.v;}typeStart(){let t=this.p();return t.k==='id'&&(TYPES.has(t.v)||t.v==='struct'||t.v==='class'||t.v==='string'||t.v==='std');}skipSemi(){this.take(';');}
+program(){let a=[];while(this.p().k!=='eof')a.push(this.stmt(true));return a;}
+stmt(top=false){let t=this.p();if(this.take(';'))return {k:'empty'};if(this.take('{')){let a=[];while(!this.take('}')){if(this.p().k==='eof')throw new CError('Unclosed block',t);a.push(this.stmt());}return {k:'block',a};}if(this.take('if')){this.need('(');let e=this.expr();this.need(')');let a=this.stmt();let b=this.take('else')?this.stmt():null;return {k:'if',e,a,b};}if(this.take('while')){this.need('(');let e=this.expr();this.need(')');return {k:'while',e,a:this.stmt()};}if(this.take('do')){let a=this.stmt();this.need('while');this.need('(');let e=this.expr();this.need(')');this.need(';');return {k:'do',a,e};}if(this.take('for')){this.need('(');let init=this.p().v===';'?null:this.typeStart()?this.decl(false):this.expr();this.need(';');let test=this.p().v===';'?null:this.expr();this.need(';');let step=this.p().v===')'?null:this.expr();this.need(')');return {k:'for',init,test,step,a:this.stmt()};}if(this.take('return')){let e=this.p().v===';'?null:this.expr();this.need(';');return {k:'return',e};}if(this.take('break')){this.need(';');return {k:'break'};}if(this.take('continue')){this.need(';');return {k:'continue'};}if(this.take('switch')){this.need('(');let e=this.expr();this.need(')');this.need('{');let cases=[];while(!this.take('}')){if(this.take('case')){let v=this.expr();this.need(':');let a=[];while(!['case','default','}'].includes(this.p().v))a.push(this.stmt());cases.push({v,a});}else if(this.take('default')){this.need(':');let a=[];while(!['case','default','}'].includes(this.p().v))a.push(this.stmt());cases.push({v:null,a});}else throw new CError('Expected case/default',this.p());}return {k:'switch',e,cases};}
+if(this.typeStart())return this.decl(true);let e=this.expr();this.need(';');return {k:'expr',e};}
+decl(semi=true){let start=this.p();while(this.typeStart()||['*','&'].includes(this.p().v)){if(this.typeStart())this.i++;else this.i++;}let name=this.id();if(this.take('(')){let params=[];if(this.p().v==='void'&&this.t[this.i+1]?.v===')'){this.i+=2;}else if(!this.take(')')){do{while(this.typeStart()||['*','&'].includes(this.p().v))this.i++;let pn=this.id();while(this.take('[')){if(this.p().v!==']')this.expr();this.need(']');}params.push(pn);}while(this.take(','));this.need(')');}let body=this.stmt();return {k:'func',name,params,body};}let dims=[];while(this.take('[')){dims.push(this.p().v===']'?null:this.expr());this.need(']');}let init=null;if(this.take('=')){if(this.take('{')){let items=[];if(!this.take('}')){do{items.push(this.expr());}while(this.take(','));this.need('}');}init={k:'initlist',items};}else init=this.expr();}let items=[{k:'decl',name,dims,init}];while(this.take(',')){let nm=this.id(),ds=[];while(this.take('[')){ds.push(this.p().v===']'?null:this.expr());this.need(']');}let iv=null;if(this.take('=')){if(this.take('{')){let xs=[];if(!this.take('}')){do{xs.push(this.expr());}while(this.take(','));this.need('}');}iv={k:'initlist',items:xs};}else iv=this.expr();}items.push({k:'decl',name:nm,dims:ds,init:iv});}if(semi)this.need(';');return items.length===1?items[0]:{k:'decls',items};}
+expr(min=0){let t=this.p(),left;if(['!','~','-','+','++','--','*','&'].includes(t.v)){this.i++;left={k:'un',op:t.v,a:this.expr(14)};}else if(this.take('(')){left=this.expr();this.need(')');}else if(t.k==='num'||t.k==='str'||t.k==='char'){this.i++;left={k:'lit',v:t.v};}else if(t.k==='id'){this.i++;left={k:'id',v:t.v};}else throw new CError('Expected expression',t);
+while(true){t=this.p();if(t.v==='('&&15>=min){this.i++;let args=[];if(!this.take(')')){do{args.push(this.expr(2));}while(this.take(','));this.need(')');}left={k:'call',f:left,args};continue;}if(t.v==='['&&15>=min){this.i++;let ix=this.expr();this.need(']');left={k:'idx',a:left,i:ix};continue;}if((t.v==='++'||t.v==='--')&&15>=min){this.i++;left={k:'post',op:t.v,a:left};continue;}const prec={'=':1,'+=':1,'-=':1,'*=':1,'/=':1,'%=':1,'?':2,'||':3,'&&':4,'|':5,'^':6,'&':7,'==':8,'!=':8,'<':9,'>':9,'<=':9,'>=':9,'<<':10,'>>':10,'+':11,'-':11,'*':12,'/':12,'%':12};let p=prec[t.v];if(!p||p<min)break;this.i++;if(t.v==='?'){let b=this.expr();this.need(':');let c=this.expr(p);left={k:'tern',e:left,b,c};continue;}let right=this.expr(p+(p===1?0:1));left={k:'bin',op:t.v,a:left,b:right};}return left;}}
+const RET=Symbol('return'),BRK=Symbol('break'),CONT=Symbol('continue');
+class Runtime{constructor(opts={}){this.steps=0;this.maxSteps=opts.maxSteps||1500000;this.maxOutput=opts.maxOutput||200000;this.output='';this.events=[];this.arrays=[];this.globals=new Map();this.funcs=new Map();this.stdin=String(opts.stdin||'').trim().split(/\s+/);this.inputAt=0;this.mainArray=null;}
+step(){if(++this.steps>this.maxSteps)throw Error('Execution limit reached (possible infinite loop).');}
+truth(x){return Array.isArray(x)?x.length>0:!!x;}get(env,n){for(let e=env;e;e=e.parent)if(e.vars.has(n))return e.vars.get(n);if(this.funcs.has(n))return {fn:n};if(n==='NULL'||n==='nullptr')return 0;if(n==='true')return 1;if(n==='false')return 0;throw Error('Undefined identifier: '+n);}
+loc(n,env){if(n.k==='id'){for(let e=env;e;e=e.parent)if(e.vars.has(n.v))return {get:()=>e.vars.get(n.v),set:v=>e.vars.set(n.v,v)};throw Error('Undefined variable: '+n.v);}if(n.k==='idx'){let a=this.val(n.a,env),i=this.val(n.i,env);if(!Array.isArray(a))throw Error('Indexing a non-array');if(i<0||i>=a.length)throw Error('Array index out of bounds: '+i);return {get:()=>a[i],set:v=>{a[i]=v;this.write(a,i,v);}};}throw Error('Expression is not assignable');}
+write(a,i,v){if(a===this.mainArray&&this.events.length<120000)this.events.push([2,i,Number(v)||0]);}
+val(n,e){this.step();switch(n.k){case'lit':return n.v;case'initlist':return n.items.map(x=>this.val(x,e));case'id':return this.get(e,n.v);case'idx':return this.loc(n,e).get();case'un':{if(n.op==='&')return this.loc(n.a,e);if(n.op==='*'){let p=this.val(n.a,e);return p&&p.get?p.get():p;}let v=this.val(n.a,e);if(n.op==='!')return !this.truth(v)?1:0;if(n.op==='~')return ~v;if(n.op==='-')return -v;if(n.op==='+')return +v;if(n.op==='++'||n.op==='--'){let l=this.loc(n.a,e),x=l.get()+(n.op==='++'?1:-1);l.set(x);return x;}break;}case'post':{let l=this.loc(n.a,e),v=l.get();l.set(v+(n.op==='++'?1:-1));return v;}case'tern':return this.truth(this.val(n.e,e))?this.val(n.b,e):this.val(n.c,e);case'bin':{let op=n.op;if(op==='&&'){let a=this.val(n.a,e);return this.truth(a)?(this.truth(this.val(n.b,e))?1:0):0;}if(op==='||'){let a=this.val(n.a,e);return this.truth(a)?1:(this.truth(this.val(n.b,e))?1:0);}if(op==='= '||['=','+=','-=','*=','/=','%='].includes(op)){let l=this.loc(n.a,e),v=this.val(n.b,e);if(op==='+=')v=l.get()+v;if(op==='-=')v=l.get()-v;if(op==='*=')v=l.get()*v;if(op==='/=')v=l.get()/v;if(op==='%=')v=l.get()%v;l.set(v);return v;}let a=this.val(n.a,e),b=this.val(n.b,e);if(['<','>','<=','>=','==','!='].includes(op)&&n.a.k==='idx'&&n.b.k==='idx'&&this.val(n.a.a,e)===this.mainArray&&this.val(n.b.a,e)===this.mainArray&&this.events.length<120000)this.events.push([0,this.val(n.a.i,e),this.val(n.b.i,e)]);return ({'+':()=>a+b,'-':()=>a-b,'*':()=>a*b,'/':()=>Math.trunc(a/b),'%':()=>a%b,'<':()=>+(a<b),'>':()=>+(a>b),'<=':()=>+(a<=b),'>=':()=>+(a>=b),'==':()=>+(a==b),'!=':()=>+(a!=b),'&':()=>a&b,'|':()=>a|b,'^':()=>a^b,'<<':()=>a<<b,'>>':()=>a>>b})[op]?.()??0;}case'call':{let f=n.f.k==='id'?n.f.v:this.val(n.f,e),args=n.args.map(x=>this.val(x,e));return this.call(f,args,e);} }return 0;}
+call(f,a,e){if(typeof f==='object'&&f.fn)f=f.fn;if(f==='printf'||f==='puts'||f==='putchar'){let s=String(a[0]??'');if(f==='puts')s+='\n';else if(f==='putchar')s=String.fromCharCode(a[0]||0);else{let i=1;s=s.replace(/%[-+0-9.]*[diuoxXfFeEgGcs]/g,m=>{let v=a[i++];if(m.endsWith('c'))return String.fromCharCode(v);if(m.endsWith('s'))return String(v);return String(v??0);});}this.output=(this.output+s).slice(-this.maxOutput);return s.length;}if(f==='scanf'){let fmt=String(a[0]||''),p=0;for(let m of fmt.matchAll(/%[diufc]/g)){let token=this.stdin[this.inputAt++];if(token===undefined)break;let ptr=a[++p];if(ptr&&ptr.set)ptr.set(Number(token));}return p;}if(f==='abs')return Math.abs(a[0]);if(f==='rand')return Math.floor(Math.random()*32768);if(f==='srand'||f==='free')return 0;if(f==='malloc'||f==='calloc')return new Array(Math.min(100000,Math.max(0,Math.floor((a[0]||0)*(f==='calloc'?(a[1]||1):1)/4)))).fill(0);if(f==='sizeof')return 4;if(!this.funcs.has(f))throw Error('Unsupported function: '+f);let fn=this.funcs.get(f),env={vars:new Map(),parent:null};fn.params.forEach((p,i)=>env.vars.set(p,a[i]));try{this.exec(fn.body,env);}catch(x){if(x&&x.type===RET)return x.value;throw x;}return 0;}
+exec(s,e){this.step();switch(s.k){case'empty':return;case'decls':for(const d of s.items)this.exec(d,e);return;case'block':{let x={vars:new Map(),parent:e};for(let q of s.a){let r=this.exec(q,x);if(r===BRK||r===CONT||r?.type===RET)return r;}return;}case'decl':{let v=s.init?this.val(s.init,e):0;if(s.dims.length){let n=s.dims[0]?this.val(s.dims[0],e):0;v=Array.isArray(v)?v:new Array(Math.max(0,Math.min(100000,n||0))).fill(0);if(Array.isArray(v)&&n&&v.length<n)v.length=n;if(!this.mainArray)this.mainArray=v;}e.vars.set(s.name,v);return;}case'func':this.funcs.set(s.name,s);return;case'expr':this.val(s.e,e);return;case'if':return this.exec(this.truth(this.val(s.e,e))?s.a:s.b||{k:'empty'},e);case'while':{let n=0;while(this.truth(this.val(s.e,e))){if(++n>this.maxSteps)throw Error('Loop limit exceeded');let r=this.exec(s.a,e);if(r===BRK)break;if(r?.type===RET)return r;}return;}case'do':{let n=0,r;do{if(++n>this.maxSteps)throw Error('Loop limit exceeded');r=this.exec(s.a,e);if(r?.type===RET)return r;if(r===BRK)break;}while(this.truth(this.val(s.e,e)));return;}case'for':{let x={vars:new Map(),parent:e};if(s.init){if(s.init.k==='decl')this.exec(s.init,x);else this.val(s.init,x);}let n=0;while(!s.test||this.truth(this.val(s.test,x))){if(++n>this.maxSteps)throw Error('Loop limit exceeded');let r=this.exec(s.a,x);if(r?.type===RET)return r;if(r===BRK)break;if(s.step)this.val(s.step,x);}return;}case'return':return {type:RET,value:s.e?this.val(s.e,e):0};case'break':return BRK;case'continue':return CONT;case'switch':{let v=this.val(s.e,e),active=false;for(let c of s.cases){if(!active&&(c.v===null||this.val(c.v,e)===v))active=true;if(active)for(let q of c.a){let r=this.exec(q,e);if(r===BRK)return; if(r?.type===RET)return r;}}return;}}}
+run(src){let ast=new Parser(src).program(),root={vars:new Map(),parent:null};for(let s of ast)if(s.k==='func')this.funcs.set(s.name,s);else if(s.k==='decl')this.exec(s,root);if(!this.funcs.has('main'))throw Error('No main() function found.');this.call('main',[],root);return {output:this.output,events:this.events,steps:this.steps};}}
+window.LocalCInterpreter={run:(src,opts)=>new Runtime(opts).run(src),version:'0.1.0'};
+})();
+
 </script>
 </body>
 </html>
